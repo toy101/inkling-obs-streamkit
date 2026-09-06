@@ -1,0 +1,19 @@
+{
+  "name": "inkling-obs-streamkit",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "bun run --parallel --filter './apps/*' dev",
+    "spellcheck": "cspell lint . --no-progress"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "cspell": "^10.2.2",
+    "typescript": "~6.0.2"
+  }
+}
