@@ -1,23 +1,94 @@
-const STORAGE_KEY = "inkling:selected-player-id";
+const STORAGE_KEY = "inkling:overlay-selection";
 
-type Listener = (playerId: string | null) => void;
+export const DEFAULT_ACCENT_COLOR = "#8b5cf6";
+
+const ACCENT_COLOR_PATTERN = /^#[0-9a-f]{6}$/i;
+
+export function isAccentColor(value: unknown): value is string {
+  return typeof value === "string" && ACCENT_COLOR_PATTERN.test(value);
+}
+
+export type OverlaySelection = {
+  tournamentId: string;
+  alphaTournamentTeamId: string;
+  bravoTournamentTeamId: string;
+  ruleId: string;
+  stageId: string;
+  accentColor: string;
+};
+
+type Listener = (selection: OverlaySelection | null) => void;
 
 const listeners = new Set<Listener>();
 
-export function getSelectedPlayerId(): string | null {
-  return localStorage.getItem(STORAGE_KEY);
+function normalizeAccentColor(value: unknown): string {
+  return isAccentColor(value) ? value.toLowerCase() : DEFAULT_ACCENT_COLOR;
 }
 
-export function setSelectedPlayerId(playerId: string): void {
-  localStorage.setItem(STORAGE_KEY, playerId);
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
 
-  // Debug画面など、同一window内のOverlayにも通知
+function getString(record: Record<string, unknown>, key: string): string | null {
+  const value = record[key];
+  return typeof value === "string" ? value : null;
+}
+
+function parseOverlaySelection(value: string | null): OverlaySelection | null {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (isRecord(parsed)) {
+      const tournamentId = getString(parsed, "tournamentId");
+      const alphaTournamentTeamId =
+        getString(parsed, "alphaTournamentTeamId") ??
+        getString(parsed, "leftTournamentTeamId");
+      const bravoTournamentTeamId =
+        getString(parsed, "bravoTournamentTeamId") ??
+        getString(parsed, "rightTournamentTeamId");
+
+      if (!tournamentId || !alphaTournamentTeamId || !bravoTournamentTeamId) {
+        return null;
+      }
+
+      return {
+        tournamentId,
+        alphaTournamentTeamId,
+        bravoTournamentTeamId,
+        ruleId: getString(parsed, "ruleId") ?? "",
+        stageId: getString(parsed, "stageId") ?? "",
+        accentColor: normalizeAccentColor(parsed["accentColor"]),
+      };
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+export function getOverlaySelection(): OverlaySelection | null {
+  return parseOverlaySelection(localStorage.getItem(STORAGE_KEY));
+}
+
+export function setOverlaySelection(selection: OverlaySelection): void {
+  const normalizedSelection = {
+    ...selection,
+    accentColor: normalizeAccentColor(selection.accentColor),
+  };
+
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizedSelection));
+
+  // Debug画面など、同一window内のOverlayにも通知する。
   for (const listener of listeners) {
-    listener(playerId);
+    listener(normalizedSelection);
   }
 }
 
-export function subscribeSelectedPlayerId(listener: Listener): () => void {
+export function subscribeOverlaySelection(listener: Listener): () => void {
   listeners.add(listener);
 
   const handleStorage = (event: StorageEvent) => {
@@ -25,7 +96,7 @@ export function subscribeSelectedPlayerId(listener: Listener): () => void {
       return;
     }
 
-    listener(event.newValue);
+    listener(parseOverlaySelection(event.newValue));
   };
 
   window.addEventListener("storage", handleStorage);

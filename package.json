@@ -8,8 +8,13 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "bun run --parallel --filter './apps/*' dev",
-    "spellcheck": "cspell lint . --no-progress"
+    "dev": "bun run --parallel db:dev dev:apps",
+    "dev:apps": "bun run --parallel --filter './apps/*' dev",
+    "spellcheck": "cspell lint . --no-progress",
+    "db:dev": "bun run --filter api db:dev",
+    "db:migrate": "bun run --filter api db:migrate",
+    "db:seed": "bun run --filter api db:seed",
+    "db:setup": "bun run --filter api db:setup"
   },
   "devDependencies": {
     "@types/bun": "latest",

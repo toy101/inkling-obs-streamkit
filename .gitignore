@@ -33,4 +33,15 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # Finder (MacOS) folder config
 .DS_Store
 
+# Agent task plan files
 agent_plan
+
+# Local Turso database and its journal files
+/apps/api/dev.db*
+/apps/api/.data/
+/apps/api/src/data/
+/apps/api/src/db/migrations/
+
+# media
+*.webm
+*.mp4

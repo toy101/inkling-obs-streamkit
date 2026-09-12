@@ -1,43 +1,22 @@
-import { cors } from "@elysia/cors";
-import { Elysia } from "elysia";
+import { app } from "./app";
+import { dataSourceName } from "./data-source";
+import {
+  readPortEnvironmentVariable,
+  requireEnvironmentVariable,
+} from "./env";
+import { initializeWeaponCatalog } from "./weapon-catalog";
 
-export type Player = {
-  id: string;
-  name: string;
-  team: string;
-};
+export { app } from "./app";
+export type { App } from "./app";
+export type { Player } from "./models/player";
 
-const players: Player[] = [
-  {
-    id: "1",
-    name: "Alice",
-    team: "Team Inkling",
-  },
-  {
-    id: "2",
-    name: "Bob",
-    team: "Team Octoling",
-  },
-  {
-    id: "3",
-    name: "Charlie",
-    team: "Team Squid",
-  },
-];
+await initializeWeaponCatalog();
 
-export const app = new Elysia()
-  .use(cors())
-
-  .get("/players", () => players)
-
-  .get("/players/:id", ({ params }) => {
-    return players.find((player) => player.id === params.id) ?? null;
-  })
-
-  .listen(3000);
-
-export type App = typeof app;
+app.listen({
+  hostname: requireEnvironmentVariable("API_HOST"),
+  port: readPortEnvironmentVariable("API_PORT"),
+});
 
 console.log(
-  `API running at http://${app.server?.hostname}:${app.server?.port}`,
+  `API running at http://${app.server?.hostname}:${app.server?.port} (data source: ${dataSourceName})`,
 );

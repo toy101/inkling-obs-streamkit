@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
 
 ## プロジェクト概要
 
@@ -12,9 +12,13 @@ Splatoon 大会配信用の自作 OBS ツールキット。OBS の **Custom Brow
 
 ```bash
 bun install                      # ルートで実行。lockfile はルートの bun.lock 1 つ
-bun dev                          # web(:5173) と api(:3000) を並列起動
+bun dev                          # Turso(:8080)、web(:5173)、api(:3000) を並列起動
+bun run dev:apps                 # JSON参照時にweb(:5173)、api(:3000)だけを起動
 bun run --filter web dev         # 片方だけ起動したいとき
 bun run --filter api dev
+bun run db:dev                   # ローカル Turso(:8080)だけを起動
+bun run db:setup                 # DBマイグレーションと開発データ投入
+bun run db:migrate               # 未適用のDBマイグレーションだけを実行
 bun run --filter web lint        # ESLint。lint 設定があるのは web のみ
 bun run --filter web build       # tsc -b && vite build（唯一の型チェック経路）
 bun run spellcheck               # cspell。設定と辞書は cspell.json
@@ -49,9 +53,9 @@ bun run spellcheck               # cspell。設定と辞書は cspell.json
 
 ### Dock → Overlay の状態同期
 
-同期経路は `apps/web/src/lib/overlay-state.ts` のみ。localStorage key は `inkling:selected-player-id`。
+同期経路は `apps/web/src/lib/overlay-state.ts` のみ。localStorage key は `inkling:overlay-selection`。
 
-- **渡すのは ID だけ。API レスポンスを localStorage に保存しない。** Overlay は受け取った ID で API を再取得する（backend がデータの正本）。表示対象が増えても「ID と表示モードを渡し、Overlay が取得する」構造を保つ。
+- **渡すのは選択IDと表示設定だけ。API レスポンスを localStorage に保存しない。** 現在のpayloadは大会、アルファ／ブラボーチーム、ルール、ステージの各IDとアクセントカラー。Overlay は受け取った ID で API を再取得する（backend がデータの正本）。表示対象が増えても「ID と表示モードを渡し、Overlay が取得する」構造を保つ。
 - `storage` イベントは変更した window 自身では発火しない。そのためモジュールレベルの listener Set を併用している。OBS では Dock と Overlay が別 window なので `storage` イベントが効き、Debug では両方が同一 window なので listener が効く。**どちらか一方だけにすると Debug か OBS のどちらかが壊れる。**
 
 ### Overlay のサイズ規約
@@ -62,7 +66,9 @@ bun run spellcheck               # cspell。設定と辞書は cspell.json
 
 ### API
 
-Elysia + `@elysia/cors`。web(:5173) と api(:3000) は別 origin なので CORS プラグインは必須。ポート 3000 は `apps/api/src/index.ts` に、接続先 URL は `apps/web/src/lib/api.ts` にハードコードされている。データは同ファイル内のインメモリ配列で、DB は未導入。
+Elysia + `@elysia/cors`。web(:5173) と api(:3000) は別 origin なので CORS プラグインは必須。ポート 3000 は `apps/api/src/index.ts` に、接続先 URL は `apps/web/src/lib/api.ts` にハードコードされている。
+
+プレイヤーと大会の既定データソースは `apps/api/src/data/` の `players.json` と `tournaments.json`。`API_DATA_SOURCE=turso` のときだけ `@libsql/client` を通じて Turso から取得する。ブキマスターはこの切替から独立し、API起動時に `WEAPON_CATALOG_URL`（既定はCloudflare CDNの `weapons.json`）から1回だけ取得・検証してメモリへ保持する。SQLには選択したブキIDだけを保存し、`weapons` テーブルやカタログへの外部キーは持たない。開発時は `apps/api/src/db/client.ts` の既定値により、`127.0.0.1:8080` のローカル Turso へ接続する。マイグレーションは `apps/api/src/db/migrations/`、初期データ投入は `apps/api/src/db/seed.ts` が担当する。ローカル DB は `apps/api/.data/` に保存し、Git へ追加しない。
 
 ## 規約と落とし穴
 

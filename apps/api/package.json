@@ -3,10 +3,15 @@
   "version": "1.0.50",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "bun run --watch src/index.ts"
+    "dev": "bun run --watch src/index.ts",
+    "db:dev": "bun run src/db/dev.ts",
+    "db:migrate": "bun run src/db/migrate.ts",
+    "db:seed": "bun run src/db/seed.ts",
+    "db:setup": "bun run db:seed"
   },
   "dependencies": {
     "@elysia/cors": "^1.4.2",
+    "@libsql/client": "^0.18.0",
     "elysia": "latest"
   },
   "devDependencies": {

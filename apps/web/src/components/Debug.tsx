@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 
 import { OVERLAY_HEIGHT, OVERLAY_WIDTH } from "../lib/overlay-canvas";
+import {
+  DEBUG_OVERLAY_AUTOPLAY_MESSAGE,
+  DEBUG_OVERLAY_SLIDES,
+  DEBUG_OVERLAY_SLIDE_MESSAGE,
+} from "../lib/debug-overlay-preview";
+import type { DebugOverlaySlideIndex } from "../lib/debug-overlay-preview";
 import { Dock } from "./Dock";
 
 const zoomOptions = [
@@ -14,7 +20,10 @@ const zoomOptions = [
 type ZoomMode = (typeof zoomOptions)[number]["value"];
 
 export function Debug() {
+  const overlayFrameRef = useRef<HTMLIFrameElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
+  const [isOverlayFrameLoaded, setIsOverlayFrameLoaded] = useState(false);
+  const [isAutoplayEnabled, setIsAutoplayEnabled] = useState(true);
   const [zoomMode, setZoomMode] = useState<ZoomMode>("fit");
   const [fitScale, setFitScale] = useState(0);
 
@@ -46,6 +55,20 @@ export function Debug() {
   const previewWidth = OVERLAY_WIDTH * scale;
   const previewHeight = OVERLAY_HEIGHT * scale;
 
+  const showSlide = (slideIndex: DebugOverlaySlideIndex) => {
+    overlayFrameRef.current?.contentWindow?.postMessage(
+      { type: DEBUG_OVERLAY_SLIDE_MESSAGE, slideIndex },
+      window.location.origin,
+    );
+  };
+
+  const setAutoplay = (autoplay: boolean) => {
+    overlayFrameRef.current?.contentWindow?.postMessage(
+      { type: DEBUG_OVERLAY_AUTOPLAY_MESSAGE, autoplay },
+      window.location.origin,
+    );
+  };
+
   return (
     <div className="debug">
       <aside className="debug-dock" aria-label="表示コントローラー">
@@ -55,26 +78,54 @@ export function Debug() {
       <section className="debug-preview" aria-labelledby="preview-heading">
         <header className="debug-toolbar">
           <h1 id="preview-heading">Overlay プレビュー</h1>
-          <label className="debug-zoom">
-            表示倍率
-            <select
-              value={zoomMode}
-              onChange={(event) => {
-                const option = zoomOptions.find(
-                  ({ value }) => value === event.target.value,
-                );
-                if (option) {
-                  setZoomMode(option.value);
-                }
-              }}
-            >
-              {zoomOptions.map(({ value, label }) => (
-                <option key={value} value={value}>
+          <div className="debug-toolbar-controls">
+            <div className="debug-slide-controls" aria-label="表示スライド">
+              <span>表示スライド</span>
+              {DEBUG_OVERLAY_SLIDES.map(({ index, label }) => (
+                <button
+                  disabled={!isOverlayFrameLoaded}
+                  key={index}
+                  onClick={() => showSlide(index)}
+                  type="button"
+                >
                   {label}
-                </option>
+                </button>
               ))}
-            </select>
-          </label>
+              <button
+                aria-pressed={isAutoplayEnabled}
+                className="debug-slide-autoplay"
+                disabled={!isOverlayFrameLoaded}
+                onClick={() => {
+                  const nextAutoplay = !isAutoplayEnabled;
+                  setIsAutoplayEnabled(nextAutoplay);
+                  setAutoplay(nextAutoplay);
+                }}
+                type="button"
+              >
+                自動切替: {isAutoplayEnabled ? "オン" : "オフ"}
+              </button>
+            </div>
+            <label className="debug-zoom">
+              表示倍率
+              <select
+                value={zoomMode}
+                onChange={(event) => {
+                  const option = zoomOptions.find(
+                    ({ value }) => value === event.target.value,
+                  );
+                  if (option) {
+                    setZoomMode(option.value);
+                  }
+                }}
+              >
+                {zoomOptions.map(({ value, label }) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
         </header>
 
         <dl className="debug-metrics">
@@ -105,6 +156,11 @@ export function Debug() {
               {/* Keep the viewport, CSS and storage events identical to the overlay page. */}
               <iframe
                 className="debug-overlay-frame"
+                onLoad={() => {
+                  setIsOverlayFrameLoaded(true);
+                  setAutoplay(isAutoplayEnabled);
+                }}
+                ref={overlayFrameRef}
                 title="1920 × 1080 Overlay プレビュー"
                 src="?view=overlay"
                 width={OVERLAY_WIDTH}
