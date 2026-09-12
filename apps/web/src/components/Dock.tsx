@@ -14,8 +14,8 @@ type DockStyle = CSSProperties & {
   "--dock-accent-color": string;
 };
 
-const ACCENT_SATURATION = 88;
-const ACCENT_LIGHTNESS = 66;
+const ACCENT_SATURATION = 95;
+const ACCENT_LIGHTNESS = 50;
 
 function getHueFromHex(color: string): number {
   const red = Number.parseInt(color.slice(1, 3), 16) / 255;
@@ -391,9 +391,6 @@ export function Dock() {
               aria-label="accent-control-hue"
               aria-valuetext={accentColor.toUpperCase()}
             />
-            <output htmlFor="dock-accent-hue">
-              {accentColor.toUpperCase()}
-            </output>
           </span>
         </label>
         <button className="dock-submit" type="submit" disabled={!canSubmit}>

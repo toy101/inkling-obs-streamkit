@@ -88,13 +88,13 @@ html[data-view="overlay"] body {
   appearance: none;
   background: linear-gradient(
     90deg,
-    hsl(0 88% 66%),
-    hsl(60 88% 66%),
-    hsl(120 88% 66%),
-    hsl(180 88% 66%),
-    hsl(240 88% 66%),
-    hsl(300 88% 66%),
-    hsl(359 88% 66%)
+    hsl(0 95% 50%),
+    hsl(60 95% 50%),
+    hsl(120 95% 50%),
+    hsl(180 95% 50%),
+    hsl(240 95% 50%),
+    hsl(300 95% 50%),
+    hsl(359 95% 50%)
   );
   border-radius: 999px;
   cursor: pointer;
