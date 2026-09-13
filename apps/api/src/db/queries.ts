@@ -1,17 +1,15 @@
 import type { Row } from "@libsql/client";
 
-import type { Position, Rule, Stage } from "../models/catalog";
+import type { Position } from "../models/catalog";
 import type {
-  OverlayMatchup,
   OverlayParticipants,
   OverlayPlayer,
-  OverlayQuery,
   OverlayTeam,
   OverlayTeamsQuery,
 } from "../models/overlay";
 import type { PlayerProfile } from "../models/player";
 import type { Tournament, TournamentStatus, TournamentTeam } from "../models/tournament";
-import { requireWeapon } from "../weapon-catalog";
+import { requireWeapon } from "../catalog-store";
 import { db } from "./client";
 
 function text(row: Row, key: string): string {
@@ -46,16 +44,6 @@ function tournamentStatus(row: Row): TournamentStatus {
     case "draft": case "registration": case "locked": case "archived": return status;
     default: throw new Error("Invalid tournament status in database");
   }
-}
-
-export async function listRules(): Promise<Rule[]> {
-  const { rows } = await db.execute("SELECT id, name FROM rules ORDER BY display_order");
-  return rows.map((row) => ({ id: text(row, "id"), name: text(row, "name") }));
-}
-
-export async function listStages(): Promise<Stage[]> {
-  const { rows } = await db.execute("SELECT id, name FROM stages ORDER BY display_order");
-  return rows.map((row) => ({ id: text(row, "id"), name: text(row, "name") }));
 }
 
 export async function listPlayers(id: string | null): Promise<PlayerProfile[]> {
@@ -182,27 +170,5 @@ export async function getOverlayParticipants(query: OverlayTeamsQuery): Promise<
     },
     alpha,
     bravo,
-  };
-}
-
-export async function getOverlayMatchup(query: OverlayQuery): Promise<OverlayMatchup | null> {
-  const participants = await getOverlayParticipants(query);
-  if (!participants) return null;
-
-  const { rows } = await db.execute({
-    sql: `SELECT r.id AS rule_id, r.name AS rule_name,
-        s.id AS stage_id, s.name AS stage_name
-      FROM rules r
-      CROSS JOIN stages s
-      WHERE r.id = ? AND s.id = ?`,
-    args: [query.ruleId, query.stageId],
-  });
-  const row = rows[0];
-  if (!row) return null;
-
-  return {
-    ...participants,
-    rule: { id: text(row, "rule_id"), name: text(row, "rule_name") },
-    stage: { id: text(row, "stage_id"), name: text(row, "stage_name") },
   };
 }

@@ -29,7 +29,7 @@ bun dev
 
 リポジトリのルートで実行する。2つの `.env.local` はGitの追跡対象外。将来のTurso認証情報を含むAPI専用の値はViteへ渡さず、ブラウザが必要とする `VITE_API_URL` だけを公開する。
 
-API は既定で `apps/api/src/data/` 以下のプレイヤー・大会 JSON を直接読むため、データモデルを調整している間は DB セットアップ不要。ブキマスターは別にCDNから読み込み、完了してからAPIがlistenを開始する。ローカルのソースファイルを変更すると、BunのwatchモードがAPIを再読み込みする。
+API は既定で `apps/api/src/data/` 以下のプレイヤー・大会 JSON を直接読むため、データモデルを調整している間は DB セットアップ不要。ブキ・ルール・ステージの各マスターは別にCDNから読み込み、完了してからAPIがlistenを開始する。ローカルのソースファイルを変更すると、BunのwatchモードがAPIを再読み込みする。
 
 <http://localhost:5173/?view=debug> を開き、左のパネルで対戦情報を選んで **Overlayへ反映** を押すと、右のオーバーレイプレビューが更新される。
 
@@ -116,21 +116,27 @@ SQL マイグレーションは `apps/api/src/db/migrations/` に置く。`bun r
 
 将来 Turso Cloud へ接続するときは、Git 管理外の `apps/api/.env.local` に `API_DATA_SOURCE=turso`、`TURSO_DATABASE_URL`、`TURSO_AUTH_TOKEN` を設定する。認証情報は API プロセスだけが保持し、Vite アプリには公開しない。ローカル用の `db:dev` はローカルHTTP URLだけを受け付けるため、Cloud利用時は `bun run dev:apps` を使う。
 
-## ブキマスター
+## 実行時カタログ
 
-ブキマスターは単一の JSON として [`https://inkling-obs-streamkit.toy101-mov.org/weapons.json`](https://inkling-obs-streamkit.toy101-mov.org/weapons.json) で公開している。Splatoon 3のブキ173件を収録し、項目はイカクロAPIのIDと原文の日本語名だけ。
+ブキ・ルール・ステージの各マスターは、CDN上のJSON配列として公開している。
+
+- [`weapons.json`](https://inkling-obs-streamkit.toy101-mov.org/weapons.json)
+- [`rules.json`](https://inkling-obs-streamkit.toy101-mov.org/rules.json)
+- [`stages.json`](https://inkling-obs-streamkit.toy101-mov.org/stages.json)
+
+ブキマスターはSplatoon 3のブキ173件を収録し、項目はイカクロAPIのIDと原文の日本語名だけ。
 
 ```json
 { "id": "236", "name": "スプラシューター" }
 ```
 
-API は listen を開始する前にこの UTF-8 JSON 配列を1回だけ取得・検証し、カタログとID索引をメモリへ保持する。ポーリングや自動再試行は行わない。取得、Content-Type、検証のいずれかに失敗した場合は、不完全なデータを配信せずAPIの起動を失敗させる。URLは `apps/api/.env.local` の `WEAPON_CATALOG_URL` で設定する。
+ルールは `id`、日本語の `name`、英語の `en`、`description`、ステージは `id`、日本語の `name`、英語の `en` を持つ。API は listen を開始する前に3つの UTF-8 JSON 配列をそれぞれ1回だけ取得・検証し、表示順を保つ配列とID索引をメモリへ保持する。ポーリングや自動再試行は行わない。いずれかの取得、Content-Type、検証に失敗した場合は、不完全なデータを配信せずAPIの起動を失敗させる。CDNのベースURLは `apps/api/.env.local` の `CATALOG_URL` で設定し、API側で `weapons.json`、`rules.json`、`stages.json` を付加する。
 
-ローカルの [`apps/api/src/data/weapons.json`](./apps/api/src/data/weapons.json) は、Git管理する公開用スナップショットとしてだけ残し、実行時コードからは参照しない。同じURLを再利用してリモートカタログを更新するときは、CDNキャッシュをパージしてからAPIを再起動する。
+ローカルの [`apps/api/src/data/`](./apps/api/src/data/) にある `weapons.json`、`rules.json`、`stages.json` は公開用スナップショットとしてだけ残し、実行時コードからは参照しない。同じURLを再利用してリモートカタログを更新するときは、CDNキャッシュをパージしてからAPIを再起動する。
 
 ブキ画像は `/overlay/matchup` の読み込み時にまとめて解決する。その対戦で使う数値のブキIDを重複排除し、`IKACLO_API_ORIGIN` で設定したHTTPS originから返されたブキ情報と画像URLを検証する。各IDへのリクエストはAPIプロセスの存続中に最大1回で、同時に複数の対戦取得が走った場合は処理中のリクエストを共有し、以後のOverlay再読み込みや対戦変更ではキャッシュ済みの結果を再利用する。失敗結果も保持するためポーリングや自動再試行は行わず、APIを再起動するとキャッシュは消える。ブラウザはカルーセル4画面をすべてマウントしたまま、ブキ画像要素だけを段階的に有効化する。初期表示では次の画面であるTeam A分だけを読み込み、Team Aが表示された時点でTeam B分を表示の8秒前から読み込む。一度有効化した画像はマウントしたままなので、スライド切替でブキ詳細を再取得したり読み込み済み画像を再マウントしたりしない。Dockでアクセントカラーだけを変えた場合も、対戦データは再取得しない。
 
-ブキマスターは `API_DATA_SOURCE` から独立している。SQL には選択したブキIDと表示順だけを保存し、`weapons` テーブルや外部カタログへの外部キーは持たない。JSON/Turso のどちらのモードでも同じメモリ上のカタログからIDを解決し、画面は従来どおりローカル Elysia API 経由で取得する。
+各カタログは `API_DATA_SOURCE` から独立している。SQL には選択したブキIDと表示順だけを保存し、ブキ・ルール・ステージのマスターテーブルや外部カタログへの外部キーは持たない。JSON/Turso のどちらのモードでも同じメモリ上のID索引からカタログ項目を解決し、画面は従来どおりローカル Elysia API 経由で取得する。
 
 ## 現時点の制約
 

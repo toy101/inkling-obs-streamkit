@@ -9,24 +9,30 @@ import type { PlayerProfile } from "./models/player";
 import type { Tournament, TournamentTeam } from "./models/tournament";
 import * as jsonDataSource from "./data/queries";
 import * as tursoDataSource from "./db/queries";
+import {
+  findRule,
+  findStage,
+  listRules,
+  listStages,
+  listWeapons,
+} from "./catalog-store";
 import { requireEnvironmentVariable } from "./env";
 import { attachWeaponImages } from "./weapon-images";
-import { listWeapons } from "./weapon-catalog";
 
 type StorageDataSource = {
-  listRules(): Promise<Rule[]>;
-  listStages(): Promise<Stage[]>;
   listPlayers(id: string | null): Promise<PlayerProfile[]>;
   listTournaments(): Promise<Tournament[]>;
   listTournamentTeams(tournamentId: string): Promise<TournamentTeam[]>;
   getOverlayParticipants(
     query: OverlayTeamsQuery,
   ): Promise<OverlayParticipants | null>;
-  getOverlayMatchup(query: OverlayQuery): Promise<OverlayMatchup | null>;
 };
 
 type DataSource = StorageDataSource & {
   listWeapons(): Promise<Weapon[]>;
+  listRules(): Promise<Rule[]>;
+  listStages(): Promise<Stage[]>;
+  getOverlayMatchup(query: OverlayQuery): Promise<OverlayMatchup | null>;
 };
 
 function selectDataSource(name: string): StorageDataSource {
@@ -48,8 +54,18 @@ export const dataSource: DataSource = {
   async listWeapons() {
     return listWeapons();
   },
+  async listRules() {
+    return listRules();
+  },
+  async listStages() {
+    return listStages();
+  },
   async getOverlayMatchup(query) {
-    const matchup = await selectedDataSource.getOverlayMatchup(query);
-    return matchup === null ? null : attachWeaponImages(matchup);
+    const participants = await selectedDataSource.getOverlayParticipants(query);
+    const rule = findRule(query.ruleId);
+    const stage = findStage(query.stageId);
+    if (participants === null || rule === null || stage === null) return null;
+
+    return attachWeaponImages({ ...participants, rule, stage });
   },
 };

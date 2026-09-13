@@ -1,14 +1,11 @@
 import type { InStatement } from "@libsql/client";
 
 import { players } from "../data/players";
-import { rules } from "../data/rules";
-import { stages } from "../data/stages";
 import { tournamentRosterEntries, tournaments, tournamentTeams } from "../data/tournaments";
 import { databaseUrl, db } from "./client";
 import { migrate } from "./migrate";
 
 const CORE_SEED_NAME = "development-v1";
-const MATCHUP_CATALOG_SEED_NAME = "development-v2-matchup-catalogs";
 const CREATED_AT = "2026-09-09T00:00:00.000Z";
 
 async function seed() {
@@ -27,11 +24,8 @@ async function seed() {
     rows.flatMap((row) => typeof row.name === "string" ? [row.name] : []),
   );
   const shouldSeedCore = !appliedSeedNames.has(CORE_SEED_NAME);
-  const shouldSeedMatchupCatalogs = !appliedSeedNames.has(
-    MATCHUP_CATALOG_SEED_NAME,
-  );
 
-  if (!shouldSeedCore && !shouldSeedMatchupCatalogs) {
+  if (!shouldSeedCore) {
     console.log("Development data already seeded; existing data was preserved.");
     return;
   }
@@ -78,29 +72,8 @@ async function seed() {
       args: [CORE_SEED_NAME],
     },
   ];
-  const matchupCatalogStatements: InStatement[] = [
-    ...rules.map((rule, index) => ({
-      sql: "INSERT INTO rules (id, name, display_order) VALUES (?, ?, ?)",
-      args: [rule.id, rule.name, index + 1],
-    })),
-    ...stages.map((stage, index) => ({
-      sql: "INSERT INTO stages (id, name, display_order) VALUES (?, ?, ?)",
-      args: [stage.id, stage.name, index + 1],
-    })),
-    {
-      sql: "INSERT INTO seed_history (name) VALUES (?)",
-      args: [MATCHUP_CATALOG_SEED_NAME],
-    },
-  ];
-  const statements = [
-    ...(shouldSeedCore ? coreStatements : []),
-    ...(shouldSeedMatchupCatalogs ? matchupCatalogStatements : []),
-  ];
-
-  await db.batch(statements, "write");
-  console.log(
-    `Seeded development data (core: ${shouldSeedCore}, matchup catalogs: ${shouldSeedMatchupCatalogs}).`,
-  );
+  await db.batch(coreStatements, "write");
+  console.log("Seeded development core data.");
 }
 
 try {

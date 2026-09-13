@@ -6,6 +6,9 @@ const migrations = [
   "003_remove_position_display_order.sql",
   "004_remove_roster_profile_snapshots.sql",
   "005_external_weapon_catalog.sql",
+  "006_localized_matchup_catalogs.sql",
+  "007_rule_descriptions.sql",
+  "008_external_matchup_catalogs.sql",
 ];
 
 export async function migrate() {

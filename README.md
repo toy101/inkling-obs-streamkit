@@ -29,7 +29,7 @@ bun dev
 
 Run these commands at the repository root. The two `.env.local` files are ignored by Git. API-only values, including future Turso credentials, stay outside Vite; `VITE_API_URL` is intentionally public because the browser needs it.
 
-The API reads player and tournament JSON under `apps/api/src/data/` by default, so database setup is unnecessary while the data model is being adjusted. The weapon catalog is loaded separately from the CDN before the API starts listening. Bun's watch mode reloads the API after local source files change.
+The API reads player and tournament JSON under `apps/api/src/data/` by default, so database setup is unnecessary while the data model is being adjusted. Weapon, rule and stage catalogs are loaded separately from the CDN before the API starts listening. Bun's watch mode reloads the API after local source files change.
 
 Then open <http://localhost:5173/?view=debug>, choose a matchup in the left panel, press **Overlayへ反映**, and the overlay preview on the right updates.
 
@@ -116,21 +116,27 @@ SQL migrations live in `apps/api/src/db/migrations/`. `bun run db:setup` applies
 
 To connect to Turso Cloud later, set `API_DATA_SOURCE=turso`, `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` in the ignored `apps/api/.env.local` file. Credentials stay in the API process and are never exposed to the Vite app. Use `bun run dev:apps` because the local `db:dev` command accepts local HTTP URLs only.
 
-## Weapon catalog
+## Runtime catalogs
 
-The weapon catalog is published as a single JSON value at [`https://inkling-obs-streamkit.toy101-mov.org/weapons.json`](https://inkling-obs-streamkit.toy101-mov.org/weapons.json). It contains 173 Splatoon 3 weapons, with only the Ikaclo API ID and the original Japanese name:
+Weapon, rule and stage catalogs are published as JSON arrays on the CDN:
+
+- [`weapons.json`](https://inkling-obs-streamkit.toy101-mov.org/weapons.json)
+- [`rules.json`](https://inkling-obs-streamkit.toy101-mov.org/rules.json)
+- [`stages.json`](https://inkling-obs-streamkit.toy101-mov.org/stages.json)
+
+The weapon catalog contains 173 Splatoon 3 weapons, with only the Ikaclo API ID and the original Japanese name:
 
 ```json
 { "id": "236", "name": "スプラシューター" }
 ```
 
-The API loads and validates this UTF-8 JSON array exactly once before it starts listening, then keeps the catalog and its ID index in memory. It does not poll or retry automatically. If the request, content type or validation fails, API startup fails instead of serving incomplete data. Its URL is configured with `WEAPON_CATALOG_URL` in `apps/api/.env.local`.
+Rules contain `id`, Japanese `name`, English `en` and `description`; stages contain `id`, Japanese `name` and English `en`. The API loads and validates all three UTF-8 JSON arrays exactly once before it starts listening, then keeps each ordered list and its ID index in memory. It does not poll or retry automatically. If any request, content type or validation fails, API startup fails instead of serving incomplete data. The CDN base URL is configured with `CATALOG_URL` in `apps/api/.env.local`; the API appends `weapons.json`, `rules.json` and `stages.json`.
 
-The local [`apps/api/src/data/weapons.json`](./apps/api/src/data/weapons.json) remains only as the checked-in publishing snapshot; runtime code does not read it. Update the remote catalog manually, purge its CDN cache when reusing the same URL, and restart the API to load the new version.
+The local `weapons.json`, `rules.json` and `stages.json` under [`apps/api/src/data/`](./apps/api/src/data/) remain only as publishing snapshots; runtime code does not read them. Update a remote catalog manually, purge its CDN cache when reusing the same URL, and restart the API to load the new version.
 
 Weapon images are resolved together when `/overlay/matchup` loads. The API collects the distinct numeric weapon IDs in that matchup and calls the HTTPS origin configured by `IKACLO_API_ORIGIN`, validating both the weapon and returned image URL. Each ID is requested at most once during the lifetime of the API process: concurrent matchups share the same in-flight request, and later Overlay reloads or matchup changes reuse its cached result. Failed lookups are cached too, so there is no polling or automatic retry; restarting the API clears the cache. The browser keeps all four carousel slides mounted, but activates weapon image elements progressively: Team A, the next slide, loads initially, and Team B starts loading when Team A becomes active, one full slide interval before it is shown. Once activated, images remain mounted, so changing slides does not refetch weapon details or remount loaded images. Changing only the Dock accent color also does not reload matchup data.
 
-The catalog is independent of `API_DATA_SOURCE`. SQL stores selected weapon IDs and their display order, but it has no `weapons` table or foreign key to the external catalog. Both JSON and Turso modes resolve those IDs through the same in-memory catalog, and the UI continues to read it through the local Elysia API.
+The catalogs are independent of `API_DATA_SOURCE`. SQL stores selected weapon IDs and their display order, but it has no weapon, rule or stage master tables and no foreign key to an external catalog. Both JSON and Turso modes resolve catalog IDs through the same in-memory indexes, and the UI continues to read them through the local Elysia API.
 
 ## Current limitations
 

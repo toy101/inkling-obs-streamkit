@@ -4,13 +4,13 @@ import {
   readPortEnvironmentVariable,
   requireEnvironmentVariable,
 } from "./env";
-import { initializeWeaponCatalog } from "./weapon-catalog";
+import { initializeCatalogStore } from "./catalog-store";
 
 export { app } from "./app";
 export type { App } from "./app";
 export type { Player } from "./models/player";
 
-await initializeWeaponCatalog();
+await initializeCatalogStore();
 
 app.listen({
   hostname: requireEnvironmentVariable("API_HOST"),
