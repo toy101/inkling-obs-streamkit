@@ -1,4 +1,5 @@
 const STORAGE_KEY = "inkling:overlay-selection";
+const STAGE_REVEAL_STORAGE_KEY = "inkling:stage-reveal-request";
 
 export const DEFAULT_ACCENT_COLOR = "#8b5cf6";
 export const MATCH_LABEL_MAX_LENGTH = 40;
@@ -19,9 +20,17 @@ export type OverlaySelection = {
   matchLabel: string;
 };
 
+export type StageRevealRequest = {
+  requestId: string;
+  ruleId: string;
+  stageId: string;
+};
+
 type Listener = (selection: OverlaySelection | null) => void;
+type StageRevealListener = (request: StageRevealRequest) => void;
 
 const listeners = new Set<Listener>();
+const stageRevealListeners = new Set<StageRevealListener>();
 
 function normalizeAccentColor(value: unknown): string {
   return isAccentColor(value) ? value.toLowerCase() : DEFAULT_ACCENT_COLOR;
@@ -79,6 +88,29 @@ function parseOverlaySelection(value: string | null): OverlaySelection | null {
   return null;
 }
 
+function parseStageRevealRequest(value: string | null): StageRevealRequest | null {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!isRecord(parsed)) {
+      return null;
+    }
+
+    const requestId = getString(parsed, "requestId");
+    const ruleId = getString(parsed, "ruleId");
+    const stageId = getString(parsed, "stageId");
+
+    return requestId && ruleId && stageId
+      ? { requestId, ruleId, stageId }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 export function getOverlaySelection(): OverlaySelection | null {
   return parseOverlaySelection(localStorage.getItem(STORAGE_KEY));
 }
@@ -113,6 +145,46 @@ export function subscribeOverlaySelection(listener: Listener): () => void {
 
   return () => {
     listeners.delete(listener);
+    window.removeEventListener("storage", handleStorage);
+  };
+}
+
+export function requestStageReveal(
+  request: Pick<StageRevealRequest, "ruleId" | "stageId">,
+): void {
+  const stageRevealRequest: StageRevealRequest = {
+    ...request,
+    requestId: crypto.randomUUID(),
+  };
+
+  localStorage.setItem(
+    STAGE_REVEAL_STORAGE_KEY,
+    JSON.stringify(stageRevealRequest),
+  );
+
+  for (const listener of stageRevealListeners) {
+    listener(stageRevealRequest);
+  }
+}
+
+export function subscribeStageReveal(listener: StageRevealListener): () => void {
+  stageRevealListeners.add(listener);
+
+  const handleStorage = (event: StorageEvent) => {
+    if (event.key !== STAGE_REVEAL_STORAGE_KEY) {
+      return;
+    }
+
+    const request = parseStageRevealRequest(event.newValue);
+    if (request) {
+      listener(request);
+    }
+  };
+
+  window.addEventListener("storage", handleStorage);
+
+  return () => {
+    stageRevealListeners.delete(listener);
     window.removeEventListener("storage", handleStorage);
   };
 }

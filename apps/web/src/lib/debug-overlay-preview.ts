@@ -2,7 +2,6 @@ export const DEBUG_OVERLAY_SLIDES = [
   { index: 0, label: "対戦カード" },
   { index: 1, label: "アルファチーム 詳細" },
   { index: 2, label: "ブラボーチーム 詳細" },
-  { index: 3, label: "次戦ルール・ステージ" },
 ] as const;
 
 export const DEBUG_OVERLAY_SLIDE_MESSAGE = "inkling:debug-overlay-slide";

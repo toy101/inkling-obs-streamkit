@@ -8,6 +8,7 @@ import {
   getOverlaySelection,
   isAccentColor,
   MATCH_LABEL_MAX_LENGTH,
+  requestStageReveal,
   setOverlaySelection,
 } from "../lib/overlay-state";
 
@@ -111,6 +112,8 @@ export function Dock() {
 
     return getAccentColorFromHue(getHueFromHex(storedAccentColor));
   });
+  const [submittedSelection, setSubmittedSelection] =
+    useState(getOverlaySelection);
 
   useEffect(() => {
     let cancelled = false;
@@ -252,32 +255,52 @@ export function Dock() {
     setSelectedTournamentId(tournamentId);
   };
 
-  const canSubmit = Boolean(
+  const canSubmitOverlay = Boolean(
     selectedTournamentId &&
     alphaTeamId &&
     bravoTeamId &&
-    ruleId &&
-    stageId &&
+    (submittedSelection?.ruleId || ruleId) &&
+    (submittedSelection?.stageId || stageId) &&
     isAccentColor(accentColor) &&
     alphaTeamId !== bravoTeamId,
   );
+  const canSubmitStageReveal = Boolean(submittedSelection && ruleId && stageId);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!canSubmit) {
+    if (!canSubmitOverlay) {
       return;
     }
 
-    setOverlaySelection({
+    const nextSelection = {
       tournamentId: selectedTournamentId,
       alphaTournamentTeamId: alphaTeamId,
       bravoTournamentTeamId: bravoTeamId,
-      ruleId,
-      stageId,
+      ruleId: submittedSelection?.ruleId || ruleId,
+      stageId: submittedSelection?.stageId || stageId,
       accentColor,
       matchLabel,
-    });
+    };
+
+    setOverlaySelection(nextSelection);
+    setSubmittedSelection(nextSelection);
+  };
+
+  const handleStageRevealSubmit = () => {
+    if (!canSubmitStageReveal || !submittedSelection) {
+      return;
+    }
+
+    const nextSelection = {
+      ...submittedSelection,
+      ruleId,
+      stageId,
+    };
+
+    setOverlaySelection(nextSelection);
+    setSubmittedSelection(nextSelection);
+    requestStageReveal({ ruleId, stageId });
   };
 
   const dockStyle: DockStyle = {
@@ -387,6 +410,15 @@ export function Dock() {
               ))}
             </select>
           </label>
+
+          <button
+            className="dock-submit dock-stage-submit"
+            type="button"
+            disabled={!canSubmitStageReveal}
+            onClick={handleStageRevealSubmit}
+          >
+            ルール・ステージを確定して動画再生
+          </button>
         </div>
         <label className="dock-accent-setting">
           アクセントカラー
@@ -408,7 +440,11 @@ export function Dock() {
             />
           </span>
         </label>
-        <button className="dock-submit" type="submit" disabled={!canSubmit}>
+        <button
+          className="dock-submit"
+          type="submit"
+          disabled={!canSubmitOverlay}
+        >
           Overlayへ反映
         </button>
       </form>

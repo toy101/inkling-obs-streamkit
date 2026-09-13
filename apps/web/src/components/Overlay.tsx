@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 
 import { OVERLAY_HEIGHT, OVERLAY_WIDTH } from "../lib/overlay-canvas";
@@ -14,12 +14,18 @@ import type { OverlayMatchup } from "../lib/api";
 import {
   DEFAULT_ACCENT_COLOR,
   getOverlaySelection,
+  subscribeStageReveal,
   subscribeOverlaySelection,
 } from "../lib/overlay-state";
+import type { StageRevealRequest } from "../lib/overlay-state";
 
 const SLIDE_DURATION_MS = 8_000;
-const MAX_TEAM_NAME_FONT_SIZE = 62;
-const MIN_TEAM_NAME_FONT_SIZE = 36;
+const STAGE_REVEAL_ENTER_DURATION_MS = 2_600;
+const STAGE_REVEAL_EXIT_DURATION_MS = 1_800;
+const STAGE_REVEAL_VIDEO_START_DELAY_MS = 1_450;
+const STAGE_REVEAL_REDUCED_DURATION_MS = 150;
+const STAGE_REVEAL_EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
+const STAGE_REVEAL_VIDEO_URL = "/slected-stage.webm";
 
 type OverlayTeam = OverlayMatchup["alpha"];
 type OverlayPlayer = OverlayTeam["players"][number];
@@ -30,6 +36,10 @@ type TeamPosition = "left" | "right";
 type OverlayStyle = CSSProperties & {
   "--overlay-accent-color": string;
   "--overlay-accent-rgb": string;
+  "--stage-reveal-easing": string;
+  "--stage-reveal-enter-duration": string;
+  "--stage-reveal-exit-duration": string;
+  "--stage-reveal-reduced-duration": string;
 };
 
 type MatchupQuery = {
@@ -164,6 +174,10 @@ type MatchupCardSlideProps = MatchupSlideProps & {
   matchLabel: string;
 };
 
+type OverlayCarouselProps = MatchupCardSlideProps & {
+  suspended: boolean;
+};
+
 function MatchupSlide({ matchup, matchLabel }: MatchupCardSlideProps) {
   return (
     <div className="overlay-matchup">
@@ -267,60 +281,8 @@ function TeamDetailSlide({
   );
 }
 
-type FittedTeamNameProps = {
-  name: string;
-};
-
-function FittedTeamName({ name }: FittedTeamNameProps) {
-  const elementRef = useRef<HTMLSpanElement>(null);
-
-  useLayoutEffect(() => {
-    const element = elementRef.current;
-    if (!element) return;
-
-    let fontSize = MAX_TEAM_NAME_FONT_SIZE;
-    element.style.fontSize = `${fontSize}px`;
-
-    while (
-      fontSize > MIN_TEAM_NAME_FONT_SIZE &&
-      element.scrollWidth > element.clientWidth
-    ) {
-      fontSize -= 1;
-      element.style.fontSize = `${fontSize}px`;
-    }
-  }, [name]);
-
-  return <span ref={elementRef}>{name}</span>;
-}
-
-function MatchInfoSlide({ matchup }: MatchupSlideProps) {
-  return (
-    <section className="overlay-match-info" aria-label="次の対戦情報">
-      <header className="overlay-slide-header overlay-match-info-header">
-        <span className="overlay-slide-eyebrow">NEXT MATCH</span>
-        <p>{matchup.tournament.name}</p>
-        <h1>
-          <FittedTeamName name={matchup.alpha.name} />
-          <b aria-label="対">VS</b>
-          <FittedTeamName name={matchup.bravo.name} />
-        </h1>
-      </header>
-
-      <dl className="overlay-match-info-grid">
-        <div>
-          <dt>RULE</dt>
-          <dd>{matchup.rule.name}</dd>
-        </div>
-        <div>
-          <dt>STAGE</dt>
-          <dd>{matchup.stage.name}</dd>
-        </div>
-      </dl>
-    </section>
-  );
-}
-
 type CarouselState = {
+  animateActiveSlide: boolean;
   autoplay: boolean;
   loadBravoTeamImages: boolean;
   slideIndex: DebugOverlaySlideIndex;
@@ -332,6 +294,7 @@ function selectCarouselSlide(
   slideIndex: DebugOverlaySlideIndex,
 ): CarouselState {
   return {
+    animateActiveSlide: true,
     autoplay: current.autoplay,
     loadBravoTeamImages:
       current.loadBravoTeamImages || slideIndex === 1 || slideIndex === 2,
@@ -340,18 +303,40 @@ function selectCarouselSlide(
   };
 }
 
-function OverlayCarousel({ matchup, matchLabel }: MatchupCardSlideProps) {
+function OverlayCarousel({
+  matchup,
+  matchLabel,
+  suspended,
+}: OverlayCarouselProps) {
   const [carouselState, setCarouselState] = useState<CarouselState>({
+    animateActiveSlide: true,
     autoplay: true,
     loadBravoTeamImages: false,
     slideIndex: 0,
     slideVersion: 0,
   });
-  const { autoplay, loadBravoTeamImages, slideIndex, slideVersion } =
-    carouselState;
+  const {
+    animateActiveSlide,
+    autoplay,
+    loadBravoTeamImages,
+    slideIndex,
+    slideVersion,
+  } = carouselState;
 
   useEffect(() => {
-    if (!autoplay) {
+    if (!suspended) {
+      return;
+    }
+
+    setCarouselState((current) =>
+      current.animateActiveSlide
+        ? { ...current, animateActiveSlide: false }
+        : current,
+    );
+  }, [suspended]);
+
+  useEffect(() => {
+    if (!autoplay || suspended) {
       return;
     }
 
@@ -368,7 +353,7 @@ function OverlayCarousel({ matchup, matchLabel }: MatchupCardSlideProps) {
     }, SLIDE_DURATION_MS);
 
     return () => window.clearTimeout(timeoutId);
-  }, [autoplay, slideVersion]);
+  }, [autoplay, slideVersion, suspended]);
 
   useEffect(() => {
     const receiveDebugSlide = (event: MessageEvent<unknown>) => {
@@ -391,6 +376,9 @@ function OverlayCarousel({ matchup, matchLabel }: MatchupCardSlideProps) {
 
         return {
           ...current,
+          animateActiveSlide: message.autoplay
+            ? current.animateActiveSlide
+            : false,
           autoplay: message.autoplay,
           slideVersion: current.slideVersion + 1,
         };
@@ -428,11 +416,14 @@ function OverlayCarousel({ matchup, matchLabel }: MatchupCardSlideProps) {
         />
       ),
     },
-    { id: "match-info", content: <MatchInfoSlide matchup={matchup} /> },
   ];
 
   return (
-    <div className={`overlay-carousel${autoplay ? "" : " is-paused"}`}>
+    <div
+      className={`overlay-carousel${
+        autoplay && !suspended && animateActiveSlide ? "" : " is-paused"
+      }`}
+    >
       {slides.map((slide, index) => (
         <div
           className={`overlay-slide${index === slideIndex ? " is-active" : ""}`}
@@ -458,9 +449,22 @@ type LoadedMatchup = {
   matchup: OverlayMatchup | null;
 };
 
+type StageRevealPhase = "ready" | "entering" | "playing" | "exiting";
+
+type StageRevealPlayback = {
+  requestId: string;
+  sourceUrl: string;
+  phase: StageRevealPhase;
+};
+
 export function Overlay() {
   const [selection, setSelection] = useState(getOverlaySelection);
   const [loaded, setLoaded] = useState<LoadedMatchup | null>(null);
+  const [stageRevealRequest, setStageRevealRequest] =
+    useState<StageRevealRequest | null>(null);
+  const [stageRevealPlayback, setStageRevealPlayback] =
+    useState<StageRevealPlayback | null>(null);
+  const stageRevealVideoRef = useRef<HTMLVideoElement>(null);
 
   const tournamentId = selection?.tournamentId ?? "";
   const alphaTournamentTeamId = selection?.alphaTournamentTeamId ?? "";
@@ -473,13 +477,166 @@ export function Overlay() {
     tournamentId,
     alphaTournamentTeamId,
     bravoTournamentTeamId,
-    ruleId,
-    stageId,
   ].join(":");
 
   useEffect(() => {
     return subscribeOverlaySelection(setSelection);
   }, []);
+
+  useEffect(() => {
+    return subscribeStageReveal(setStageRevealRequest);
+  }, []);
+
+  useEffect(() => {
+    if (!stageRevealRequest) {
+      return;
+    }
+
+    const controller = new AbortController();
+    let objectUrl: string | null = null;
+
+    setStageRevealPlayback(null);
+
+    const downloadStageVideo = async () => {
+      try {
+        const response = await fetch(STAGE_REVEAL_VIDEO_URL, {
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          throw new Error(
+            `ステージ動画のダウンロードに失敗しました: ${response.status}`,
+          );
+        }
+
+        const videoBlob = await response.blob();
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        objectUrl = URL.createObjectURL(videoBlob);
+        setStageRevealPlayback({
+          requestId: stageRevealRequest.requestId,
+          sourceUrl: objectUrl,
+          phase: "ready",
+        });
+      } catch (error) {
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        console.error(error);
+        setStageRevealRequest(null);
+      }
+    };
+
+    void downloadStageVideo();
+
+    return () => {
+      controller.abort();
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [stageRevealRequest]);
+
+  useEffect(() => {
+    if (!stageRevealPlayback) {
+      return;
+    }
+
+    const requestId = stageRevealPlayback.requestId;
+    const prefersReducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    const transitionDuration = prefersReducedMotion
+      ? STAGE_REVEAL_REDUCED_DURATION_MS
+      : stageRevealPlayback.phase === "exiting"
+        ? STAGE_REVEAL_EXIT_DURATION_MS
+        : STAGE_REVEAL_ENTER_DURATION_MS;
+    const videoStartDelay = prefersReducedMotion
+      ? 0
+      : STAGE_REVEAL_VIDEO_START_DELAY_MS;
+
+    if (stageRevealPlayback.phase === "ready") {
+      let enterFrameId = 0;
+      const mountFrameId = window.requestAnimationFrame(() => {
+        enterFrameId = window.requestAnimationFrame(() => {
+          setStageRevealPlayback((current) =>
+            current?.requestId === requestId && current.phase === "ready"
+              ? { ...current, phase: "entering" }
+              : current,
+          );
+        });
+      });
+
+      return () => {
+        window.cancelAnimationFrame(mountFrameId);
+        window.cancelAnimationFrame(enterFrameId);
+      };
+    }
+
+    if (stageRevealPlayback.phase === "entering") {
+      const playTimeoutId = window.setTimeout(() => {
+        const video = stageRevealVideoRef.current;
+        if (!video) {
+          setStageRevealPlayback((current) =>
+            current?.requestId === requestId
+              ? { ...current, phase: "exiting" }
+              : current,
+          );
+          return;
+        }
+
+        video.currentTime = 0;
+        const exitPlayback = () => {
+          setStageRevealPlayback((current) =>
+            current?.requestId === requestId
+              ? { ...current, phase: "exiting" }
+              : current,
+          );
+        };
+
+        void video
+          .play()
+          .catch(async (error: unknown) => {
+            console.warn(
+              "音声付き動画の自動再生が拒否されたため、ミュートで再試行します",
+              error,
+            );
+            video.muted = true;
+
+            try {
+              await video.play();
+            } catch (mutedError: unknown) {
+              console.error(mutedError);
+              exitPlayback();
+            }
+          });
+      }, videoStartDelay);
+
+      const completeTransitionTimeoutId = window.setTimeout(() => {
+        setStageRevealPlayback((current) =>
+          current?.requestId === requestId && current.phase === "entering"
+            ? { ...current, phase: "playing" }
+            : current,
+        );
+      }, transitionDuration);
+
+      return () => {
+        window.clearTimeout(playTimeoutId);
+        window.clearTimeout(completeTransitionTimeoutId);
+      };
+    }
+
+    if (stageRevealPlayback.phase === "exiting") {
+      const timeoutId = window.setTimeout(() => {
+        setStageRevealPlayback(null);
+        setStageRevealRequest(null);
+      }, transitionDuration);
+
+      return () => window.clearTimeout(timeoutId);
+    }
+  }, [stageRevealPlayback]);
 
   useEffect(() => {
     if (
@@ -489,6 +646,10 @@ export function Overlay() {
       !ruleId ||
       !stageId
     ) {
+      return;
+    }
+
+    if (loaded?.dataSelectionKey === dataSelectionKey) {
       return;
     }
 
@@ -516,8 +677,9 @@ export function Overlay() {
   }, [
     alphaTournamentTeamId,
     bravoTournamentTeamId,
-    ruleId,
     dataSelectionKey,
+    loaded?.dataSelectionKey,
+    ruleId,
     stageId,
     tournamentId,
   ]);
@@ -529,6 +691,10 @@ export function Overlay() {
     height: OVERLAY_HEIGHT,
     "--overlay-accent-color": accentColor,
     "--overlay-accent-rgb": toRgbChannels(accentColor),
+    "--stage-reveal-easing": STAGE_REVEAL_EASING,
+    "--stage-reveal-enter-duration": `${STAGE_REVEAL_ENTER_DURATION_MS}ms`,
+    "--stage-reveal-exit-duration": `${STAGE_REVEAL_EXIT_DURATION_MS}ms`,
+    "--stage-reveal-reduced-duration": `${STAGE_REVEAL_REDUCED_DURATION_MS}ms`,
   };
 
   return (
@@ -543,7 +709,56 @@ export function Overlay() {
           key={dataSelectionKey}
           matchup={matchup}
           matchLabel={matchLabel}
+          suspended={stageRevealPlayback !== null}
         />
+      )}
+
+      {stageRevealPlayback && (
+        <div
+          className={`overlay-stage-reveal is-${stageRevealPlayback.phase}`}
+        >
+          <video
+            aria-label="選択ステージ紹介動画"
+            onEnded={() =>
+              setStageRevealPlayback((current) =>
+                current ? { ...current, phase: "exiting" } : current,
+              )
+            }
+            onError={() => {
+              console.error("ステージ動画を再生できませんでした");
+              setStageRevealPlayback((current) =>
+                current ? { ...current, phase: "exiting" } : current,
+              );
+            }}
+            playsInline
+            preload="auto"
+            ref={stageRevealVideoRef}
+            src={stageRevealPlayback.sourceUrl}
+          />
+
+          <div className="overlay-stage-transition" aria-hidden="true">
+            <div className="overlay-stage-transition-grid" />
+            <div className="overlay-stage-transition-panel is-left" />
+            <div className="overlay-stage-transition-panel is-right" />
+            <span className="overlay-stage-transition-scanline" />
+            <span className="overlay-stage-transition-corner is-top-left" />
+            <span className="overlay-stage-transition-corner is-top-right" />
+            <span className="overlay-stage-transition-corner is-bottom-left" />
+            <span className="overlay-stage-transition-corner is-bottom-right" />
+
+            <div className="overlay-stage-transition-copy">
+              <span className="overlay-stage-transition-overline">
+                MAP // LOCKED
+              </span>
+              <strong>Next Stage</strong>
+              <span className="overlay-stage-transition-meta">
+                INKLING STREAMKIT / ARENA DATA TRANSFER
+              </span>
+            </div>
+
+            <span className="overlay-stage-transition-mark" />
+          </div>
+        </div>
       )}
     </main>
   );
