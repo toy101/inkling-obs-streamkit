@@ -160,16 +160,43 @@ type MatchupSlideProps = {
   matchup: OverlayMatchup;
 };
 
-function MatchupSlide({ matchup }: MatchupSlideProps) {
+type MatchupCardSlideProps = MatchupSlideProps & {
+  matchLabel: string;
+};
+
+function MatchupSlide({ matchup, matchLabel }: MatchupCardSlideProps) {
   return (
     <div className="overlay-matchup">
-      <div className="overlay-team-grid">
-        <TeamPanel position="left" team={matchup.alpha} />
-        <TeamPanel position="right" team={matchup.bravo} />
+      <header className="overlay-matchup-header">
+        <div className="overlay-matchup-kicker" aria-hidden="true">
+          <span>MATCH UP</span>
+        </div>
+        <div className="overlay-matchup-title-frame">
+          <svg
+            className="overlay-matchup-title-outline"
+            viewBox="0 0 900 100"
+            preserveAspectRatio="none"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <polygon points="25,2 875,2 898,50 875,98 25,98 2,50" />
+          </svg>
+          <div className="overlay-matchup-title-plate">
+            <h1>{matchup.tournament.name}</h1>
+            {matchLabel && <p>{matchLabel}</p>}
+          </div>
+        </div>
+      </header>
+
+      <div className="overlay-matchup-body">
+        <div className="overlay-team-grid">
+          <TeamPanel position="left" team={matchup.alpha} />
+          <TeamPanel position="right" team={matchup.bravo} />
+        </div>
+        <span className="overlay-matchup-versus" aria-label="vs">
+          VS
+        </span>
       </div>
-      <span className="overlay-matchup-versus" aria-label="vs">
-        VS
-      </span>
     </div>
   );
 }
@@ -313,7 +340,7 @@ function selectCarouselSlide(
   };
 }
 
-function OverlayCarousel({ matchup }: MatchupSlideProps) {
+function OverlayCarousel({ matchup, matchLabel }: MatchupCardSlideProps) {
   const [carouselState, setCarouselState] = useState<CarouselState>({
     autoplay: true,
     loadBravoTeamImages: false,
@@ -375,7 +402,10 @@ function OverlayCarousel({ matchup }: MatchupSlideProps) {
   }, []);
 
   const slides = [
-    { id: "matchup", content: <MatchupSlide matchup={matchup} /> },
+    {
+      id: "matchup",
+      content: <MatchupSlide matchup={matchup} matchLabel={matchLabel} />,
+    },
     {
       id: "alpha-team",
       content: (
@@ -438,6 +468,7 @@ export function Overlay() {
   const ruleId = selection?.ruleId ?? "";
   const stageId = selection?.stageId ?? "";
   const accentColor = selection?.accentColor ?? DEFAULT_ACCENT_COLOR;
+  const matchLabel = selection?.matchLabel ?? "";
   const dataSelectionKey = [
     tournamentId,
     alphaTournamentTeamId,
@@ -507,7 +538,13 @@ export function Overlay() {
         <div className="overlay-background-rings" />
       </div>
 
-      {matchup && <OverlayCarousel key={dataSelectionKey} matchup={matchup} />}
+      {matchup && (
+        <OverlayCarousel
+          key={dataSelectionKey}
+          matchup={matchup}
+          matchLabel={matchLabel}
+        />
+      )}
     </main>
   );
 }

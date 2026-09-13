@@ -7,6 +7,7 @@ import {
   DEFAULT_ACCENT_COLOR,
   getOverlaySelection,
   isAccentColor,
+  MATCH_LABEL_MAX_LENGTH,
   setOverlaySelection,
 } from "../lib/overlay-state";
 
@@ -100,6 +101,9 @@ export function Dock() {
   );
   const [stageId, setStageId] = useState(
     () => getOverlaySelection()?.stageId ?? "",
+  );
+  const [matchLabel, setMatchLabel] = useState(
+    () => getOverlaySelection()?.matchLabel ?? "",
   );
   const [accentColor, setAccentColor] = useState(() => {
     const storedAccentColor =
@@ -272,6 +276,7 @@ export function Dock() {
       ruleId,
       stageId,
       accentColor,
+      matchLabel,
     });
   };
 
@@ -296,6 +301,16 @@ export function Dock() {
               </option>
             ))}
           </select>
+        </label>
+        <label className="dock-match-label">
+          対戦名
+          <input
+            type="text"
+            value={matchLabel}
+            maxLength={MATCH_LABEL_MAX_LENGTH}
+            placeholder="例：1回戦、決勝戦"
+            onChange={(event) => setMatchLabel(event.target.value)}
+          />
         </label>
         <div className="dock-team-selectors">
           <label>

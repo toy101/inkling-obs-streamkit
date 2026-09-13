@@ -136,10 +136,15 @@ html[data-view="overlay"] body {
 }
 
 .dock select,
+.dock input[type="text"],
 .debug-zoom select {
   min-width: 0;
   padding: 8px;
   font: inherit;
+}
+
+.dock-match-label {
+  margin-top: 20px;
 }
 
 .dock-submit {
@@ -273,8 +278,127 @@ html[data-view="overlay"] body {
 /* Matchup layout */
 .overlay-matchup {
   position: relative;
+  top: 40px;
   width: 1680px;
   color: rgb(var(--overlay-ink-rgb));
+}
+
+.overlay-matchup-header {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 48px);
+  left: 0;
+  display: grid;
+  justify-items: center;
+  text-align: center;
+}
+
+.overlay-matchup-kicker {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 440px;
+  margin-bottom: 8px;
+  color: rgb(var(--overlay-ink-rgb) / 66%);
+  font-size: 14px;
+  font-weight: 950;
+  line-height: 1;
+  letter-spacing: 0.24em;
+}
+
+.overlay-matchup-kicker::before,
+.overlay-matchup-kicker::after {
+  height: 2px;
+  flex: 1;
+  content: "";
+}
+
+.overlay-matchup-kicker::before {
+  background: linear-gradient(90deg, transparent, var(--overlay-accent-color));
+}
+
+.overlay-matchup-kicker::after {
+  background: linear-gradient(90deg, var(--overlay-accent-color), transparent);
+}
+
+.overlay-matchup-kicker span {
+  padding-left: 0.24em;
+}
+
+.overlay-matchup-title-frame {
+  position: relative;
+  width: 900px;
+  padding: 3px;
+  background: rgb(255 255 255 / 42%);
+  clip-path: polygon(
+    24px 0,
+    calc(100% - 24px) 0,
+    100% 50%,
+    calc(100% - 24px) 100%,
+    24px 100%,
+    0 50%
+  );
+}
+
+.overlay-matchup-title-outline {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  color: rgb(var(--overlay-accent-rgb) / 72%);
+  pointer-events: none;
+}
+
+.overlay-matchup-title-outline polygon {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.overlay-matchup-title-plate {
+  position: relative;
+  z-index: 1;
+  padding: 10px 52px 12px;
+  color: rgb(var(--overlay-ink-rgb));
+  background: transparent;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 96%),
+    inset 0 -1px 0 rgb(var(--overlay-ink-rgb) / 9%);
+  clip-path: inherit;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.overlay-matchup-title-plate h1 {
+  overflow: hidden;
+  margin: 0;
+  color: rgb(var(--overlay-ink-rgb) / 64%);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: 0.09em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.overlay-matchup-title-plate p {
+  overflow: hidden;
+  margin: 3px 0 0;
+  color: rgb(var(--overlay-ink-rgb));
+  font-size: 32px;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: 0.09em;
+  text-shadow: 0 1px 0 rgb(255 255 255 / 88%);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.overlay-matchup-body {
+  position: relative;
 }
 
 .overlay-team-grid {
