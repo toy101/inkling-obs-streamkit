@@ -11,6 +11,7 @@ import {
   requestStageReveal,
   setOverlaySelection,
 } from "../lib/overlay-state";
+import type { OverlaySelection } from "../lib/overlay-state";
 
 type DockStyle = CSSProperties & {
   "--dock-accent-color": string;
@@ -255,39 +256,73 @@ export function Dock() {
     setSelectedTournamentId(tournamentId);
   };
 
-  const canSubmitOverlay = Boolean(
+  const isMatchupDirty = Boolean(
+    !submittedSelection ||
+    submittedSelection.tournamentId !== selectedTournamentId ||
+    submittedSelection.alphaTournamentTeamId !== alphaTeamId ||
+    submittedSelection.bravoTournamentTeamId !== bravoTeamId,
+  );
+  const canSubmitMatchup = Boolean(
     selectedTournamentId &&
     alphaTeamId &&
     bravoTeamId &&
     (submittedSelection?.ruleId || ruleId) &&
     (submittedSelection?.stageId || stageId) &&
     isAccentColor(accentColor) &&
-    alphaTeamId !== bravoTeamId,
+    alphaTeamId !== bravoTeamId &&
+    isMatchupDirty,
+  );
+  const canSubmitMatchLabel = Boolean(
+    submittedSelection && matchLabel !== submittedSelection.matchLabel,
   );
   const canSubmitStageReveal = Boolean(submittedSelection && ruleId && stageId);
+  const canSubmitAccent = Boolean(
+    submittedSelection &&
+    isAccentColor(accentColor) &&
+    accentColor !== submittedSelection.accentColor,
+  );
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const commitSelection = (nextSelection: OverlaySelection) => {
+    setOverlaySelection(nextSelection);
+    setSubmittedSelection(nextSelection);
+  };
+
+  const handleMatchupSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!canSubmitOverlay) {
+    if (!canSubmitMatchup) {
       return;
     }
 
-    const nextSelection = {
+    const nextSelection: OverlaySelection = {
       tournamentId: selectedTournamentId,
       alphaTournamentTeamId: alphaTeamId,
       bravoTournamentTeamId: bravoTeamId,
       ruleId: submittedSelection?.ruleId || ruleId,
       stageId: submittedSelection?.stageId || stageId,
-      accentColor,
-      matchLabel,
+      accentColor: submittedSelection?.accentColor ?? DEFAULT_ACCENT_COLOR,
+      matchLabel: submittedSelection?.matchLabel ?? "",
     };
 
-    setOverlaySelection(nextSelection);
-    setSubmittedSelection(nextSelection);
+    commitSelection(nextSelection);
   };
 
-  const handleStageRevealSubmit = () => {
+  const handleMatchLabelSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!canSubmitMatchLabel || !submittedSelection) {
+      return;
+    }
+
+    commitSelection({
+      ...submittedSelection,
+      matchLabel,
+    });
+  };
+
+  const handleStageRevealSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
     if (!canSubmitStageReveal || !submittedSelection) {
       return;
     }
@@ -298,9 +333,21 @@ export function Dock() {
       stageId,
     };
 
-    setOverlaySelection(nextSelection);
-    setSubmittedSelection(nextSelection);
+    commitSelection(nextSelection);
     requestStageReveal({ ruleId, stageId });
+  };
+
+  const handleAccentSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!canSubmitAccent || !submittedSelection) {
+      return;
+    }
+
+    commitSelection({
+      ...submittedSelection,
+      accentColor,
+    });
   };
 
   const dockStyle: DockStyle = {
@@ -309,35 +356,32 @@ export function Dock() {
   const accentHue = getHueFromHex(accentColor);
 
   return (
-    <main className="dock">
-      <form onSubmit={handleSubmit} style={dockStyle}>
-        <h3>Inkling StreamKit Controller</h3>
-        <label>
-          大会
-          <select
-            value={selectedTournamentId}
-            onChange={(event) => handleTournamentChange(event.target.value)}
-          >
-            {tournaments.map((tournament) => (
-              <option key={tournament.id} value={tournament.id}>
-                {tournament.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="dock-match-label">
-          対戦名
-          <input
-            type="text"
-            value={matchLabel}
-            maxLength={MATCH_LABEL_MAX_LENGTH}
-            placeholder="例：1回戦、決勝戦"
-            onChange={(event) => setMatchLabel(event.target.value)}
-          />
-        </label>
-        <div className="dock-team-selectors">
-          <label>
-            アルファチーム
+    <main className="dock" style={dockStyle}>
+      <header className="dock-header">
+        <h1>Inkling StreamKit</h1>
+        <span>Controller</span>
+      </header>
+
+      <form className="dock-form" onSubmit={handleMatchupSubmit}>
+        <h2>対戦カード</h2>
+
+        <div className="dock-fields">
+          <label className="dock-field">
+            <span>大会</span>
+            <select
+              value={selectedTournamentId}
+              onChange={(event) => handleTournamentChange(event.target.value)}
+            >
+              {tournaments.map((tournament) => (
+                <option key={tournament.id} value={tournament.id}>
+                  {tournament.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="dock-field">
+            <span>ALPHA</span>
             <select
               value={alphaTeamId}
               disabled={teams.length < 2}
@@ -355,12 +399,8 @@ export function Dock() {
             </select>
           </label>
 
-          <span className="dock-versus" aria-hidden="true">
-            VS
-          </span>
-
-          <label>
-            ブラボーチーム
+          <label className="dock-field">
+            <span>BRAVO</span>
             <select
               value={bravoTeamId}
               disabled={teams.length < 2}
@@ -378,14 +418,48 @@ export function Dock() {
             </select>
           </label>
         </div>
-        <div className="dock-match-settings">
-          <h2>次の対戦</h2>
 
-          <label>
-            ルール
+        <button
+          className="dock-submit"
+          type="submit"
+          disabled={!canSubmitMatchup}
+        >
+          対戦を反映
+        </button>
+      </form>
+
+      <form className="dock-form" onSubmit={handleMatchLabelSubmit}>
+        <h2>対戦名</h2>
+
+        <div className="dock-inline-action">
+          <input
+            type="text"
+            value={matchLabel}
+            maxLength={MATCH_LABEL_MAX_LENGTH}
+            placeholder="例：1回戦、決勝戦"
+            disabled={!submittedSelection}
+            aria-label="対戦名"
+            onChange={(event) => setMatchLabel(event.target.value)}
+          />
+          <button
+            className="dock-submit dock-submit-inline"
+            type="submit"
+            disabled={!canSubmitMatchLabel}
+          >
+            反映
+          </button>
+        </div>
+      </form>
+
+      <form className="dock-form" onSubmit={handleStageRevealSubmit}>
+        <h2>次の対戦</h2>
+
+        <div className="dock-fields">
+          <label className="dock-field">
+            <span>ルール</span>
             <select
               value={ruleId}
-              disabled={rules.length === 0}
+              disabled={!submittedSelection || rules.length === 0}
               onChange={(event) => setRuleId(event.target.value)}
             >
               {rules.map((rule) => (
@@ -396,11 +470,11 @@ export function Dock() {
             </select>
           </label>
 
-          <label>
-            ステージ
+          <label className="dock-field">
+            <span>ステージ</span>
             <select
               value={stageId}
-              disabled={stages.length === 0}
+              disabled={!submittedSelection || stages.length === 0}
               onChange={(event) => setStageId(event.target.value)}
             >
               {stages.map((stage) => (
@@ -410,43 +484,43 @@ export function Dock() {
               ))}
             </select>
           </label>
-
-          <button
-            className="dock-submit dock-stage-submit"
-            type="button"
-            disabled={!canSubmitStageReveal}
-            onClick={handleStageRevealSubmit}
-          >
-            ルール・ステージを確定して動画再生
-          </button>
         </div>
-        <label className="dock-accent-setting">
-          アクセントカラー
-          <span className="dock-accent-control">
-            <input
-              id="dock-accent-hue"
-              type="range"
-              min="0"
-              max="359"
-              step="1"
-              value={accentHue}
-              onChange={(event) =>
-                setAccentColor(
-                  getAccentColorFromHue(Number(event.target.value)),
-                )
-              }
-              aria-label="accent-control-hue"
-              aria-valuetext={accentColor.toUpperCase()}
-            />
-          </span>
-        </label>
+
         <button
           className="dock-submit"
           type="submit"
-          disabled={!canSubmitOverlay}
+          disabled={!canSubmitStageReveal}
         >
-          Overlayへ反映
+          確定・動画再生
         </button>
+      </form>
+
+      <form className="dock-form" onSubmit={handleAccentSubmit}>
+        <h2>アクセントカラー</h2>
+
+        <div className="dock-inline-action dock-accent-control">
+          <input
+            id="dock-accent-hue"
+            type="range"
+            min="0"
+            max="359"
+            step="1"
+            value={accentHue}
+            disabled={!submittedSelection}
+            onChange={(event) =>
+              setAccentColor(getAccentColorFromHue(Number(event.target.value)))
+            }
+            aria-label="accent-control-hue"
+            aria-valuetext={accentColor.toUpperCase()}
+          />
+          <button
+            className="dock-submit dock-submit-inline"
+            type="submit"
+            disabled={!canSubmitAccent}
+          >
+            色を反映
+          </button>
+        </div>
       </form>
     </main>
   );

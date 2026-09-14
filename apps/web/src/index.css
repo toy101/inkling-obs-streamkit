@@ -23,68 +23,98 @@ html[data-view="overlay"] body {
 }
 
 .dock {
-  padding: 24px;
+  min-height: 100%;
+  padding: 12px;
   background: #18181b;
   color: white;
-  font-size: 16px;
+  font-size: 13px;
 }
 
-.dock h1 {
-  margin: 0 0 24px;
-  font-size: 24px;
-  line-height: 1.3;
-}
-
-.dock label {
+.dock-header {
   display: flex;
-  flex-direction: column;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 2px 10px;
+}
+
+.dock-header h1 {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.25;
+}
+
+.dock-header span {
+  color: #a1a1aa;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.dock-form {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0 2px;
+}
+
+.dock-form + .dock-form {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #3f3f46;
+}
+
+.dock-form h2 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  color: #e4e4e7;
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.dock-form h2::before {
+  width: 3px;
+  height: 11px;
+  content: "";
+  background: var(--dock-accent-color, #8b5cf6);
+  border-radius: 999px;
+}
+
+.dock-fields {
+  display: grid;
+  gap: 5px;
+}
+
+.dock-field {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  align-items: center;
   gap: 8px;
 }
 
-.dock-team-selectors {
-  display: grid;
-  gap: 12px;
-  margin-top: 20px;
-}
-
-.dock-versus {
+.dock-field > span {
+  overflow: hidden;
   color: #a1a1aa;
-  font-size: 13px;
+  font-size: 10px;
   font-weight: 700;
-  text-align: center;
+  letter-spacing: 0.04em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.dock-match-settings {
-  display: grid;
-  gap: 12px;
-  margin-top: 28px;
-  padding-top: 24px;
-  border-top: 1px solid #3f3f46;
-}
-
-.dock-match-settings h2 {
-  margin: 0 0 4px;
-  font-size: 18px;
-}
-
-.dock-accent-setting {
-  margin-top: 24px;
-  padding-top: 24px;
-  border-top: 1px solid #3f3f46;
-}
-
-.dock-accent-control {
+.dock-inline-action {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px 12px;
+  gap: 6px;
 }
 
 .dock-accent-control input[type="range"] {
-  grid-column: 1 / -1;
   width: 100%;
-  height: 14px;
-  margin: 6px 0;
+  height: 12px;
+  margin: 10px 0;
   appearance: none;
   background: linear-gradient(
     90deg,
@@ -101,8 +131,8 @@ html[data-view="overlay"] body {
 }
 
 .dock-accent-control input[type="range"]::-webkit-slider-thumb {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   appearance: none;
   background: var(--dock-accent-color, #8b5cf6);
   border: 3px solid white;
@@ -111,8 +141,8 @@ html[data-view="overlay"] body {
 }
 
 .dock-accent-control input[type="range"]::-moz-range-thumb {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   background: var(--dock-accent-color, #8b5cf6);
   border: 3px solid white;
   border-radius: 50%;
@@ -124,46 +154,76 @@ html[data-view="overlay"] body {
   outline-offset: 4px;
 }
 
-.dock-accent-control small {
-  color: #d4d4d8;
-  font-size: 12px;
-}
-
-.dock-accent-control output {
-  color: #fafafa;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 14px;
-}
-
 .dock select,
 .dock input[type="text"],
 .debug-zoom select {
   min-width: 0;
-  padding: 8px;
+  min-height: 32px;
+  padding: 5px 7px;
   font: inherit;
-}
-
-.dock-match-label {
-  margin-top: 20px;
 }
 
 .dock-submit {
   width: 100%;
-  margin-top: 24px;
-  padding: 10px 16px;
+  min-height: 32px;
+  padding: 5px 10px;
   color: white;
-  font: inherit;
-  font-weight: 700;
+  font: 700 12px/1.2 Arial, sans-serif;
   background: var(--dock-accent-color, #8b5cf6);
   border: 0;
   border-radius: 6px;
   cursor: pointer;
 }
 
+.dock-submit-inline {
+  width: auto;
+  min-width: 58px;
+}
+
 .dock-submit:disabled {
   color: #a1a1aa;
   background: #3f3f46;
   cursor: not-allowed;
+}
+
+.dock-accent-control input[type="range"]:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+@media (max-height: 560px) {
+  .dock {
+    padding: 8px;
+    font-size: 12px;
+  }
+
+  .dock-header {
+    padding-bottom: 6px;
+  }
+
+  .dock-form {
+    gap: 4px;
+  }
+
+  .dock-form + .dock-form {
+    margin-top: 6px;
+    padding-top: 6px;
+  }
+
+  .dock-fields {
+    gap: 3px;
+  }
+
+  .dock select,
+  .dock input[type="text"],
+  .dock-submit {
+    min-height: 28px;
+    padding-block: 3px;
+  }
+
+  .dock-accent-control input[type="range"] {
+    margin-block: 8px;
+  }
 }
 
 .overlay {
