@@ -26,6 +26,7 @@ const STAGE_REVEAL_VIDEO_START_DELAY_MS = 1_450;
 const STAGE_REVEAL_REDUCED_DURATION_MS = 150;
 const STAGE_REVEAL_EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
 const STAGE_REVEAL_VIDEO_URL = "/slected-stage.webm";
+const STAGE_REVEAL_VIGNETTE_URL = "/stage-reveal-vignette.png";
 
 type OverlayTeam = OverlayMatchup["alpha"];
 type OverlayPlayer = OverlayTeam["players"][number];
@@ -51,6 +52,16 @@ type MatchupQuery = {
 };
 
 const matchupRequests = new Map<string, Promise<OverlayMatchup | null>>();
+
+function getMatchupDataSelectionKey(query: MatchupQuery): string {
+  return [
+    query.tournamentId,
+    query.alphaTournamentTeamId,
+    query.bravoTournamentTeamId,
+    query.ruleId,
+    query.stageId,
+  ].join(":");
+}
 
 function toRgbChannels(color: string): string {
   const red = Number.parseInt(color.slice(1, 3), 16);
@@ -453,9 +464,42 @@ type StageRevealPhase = "ready" | "entering" | "playing" | "exiting";
 
 type StageRevealPlayback = {
   requestId: string;
+  rule: OverlayMatchup["rule"];
   sourceUrl: string;
+  stage: OverlayMatchup["stage"];
   phase: StageRevealPhase;
 };
+
+type StageRevealContentProps = Pick<StageRevealPlayback, "rule" | "stage">;
+
+function StageRevealContent({ rule, stage }: StageRevealContentProps) {
+  const stageNameBreakIndex = stage.en.indexOf(" ");
+
+  return (
+    <div className="overlay-stage-reveal-content">
+      <section className="overlay-stage-reveal-rule" aria-label="選択ルール">
+        <strong lang="en">{rule.en}</strong>
+        <p lang="en">{rule.description}</p>
+        <span lang="ja">{rule.name}</span>
+      </section>
+
+      <section className="overlay-stage-reveal-stage" aria-label="選択ステージ">
+        <span lang="ja">{stage.name}</span>
+        <strong lang="en">
+          {stageNameBreakIndex >= 0 ? (
+            <>
+              {stage.en.slice(0, stageNameBreakIndex)}
+              <br />
+              {stage.en.slice(stageNameBreakIndex + 1)}
+            </>
+          ) : (
+            stage.en
+          )}
+        </strong>
+      </section>
+    </div>
+  );
+}
 
 export function Overlay() {
   const [selection, setSelection] = useState(getOverlaySelection);
@@ -473,11 +517,29 @@ export function Overlay() {
   const stageId = selection?.stageId ?? "";
   const accentColor = selection?.accentColor ?? DEFAULT_ACCENT_COLOR;
   const matchLabel = selection?.matchLabel ?? "";
-  const dataSelectionKey = [
+  const dataSelectionKey = getMatchupDataSelectionKey({
     tournamentId,
     alphaTournamentTeamId,
     bravoTournamentTeamId,
-  ].join(":");
+    ruleId,
+    stageId,
+  });
+  const stageRevealDataSelectionKey = stageRevealRequest
+    ? getMatchupDataSelectionKey({
+        tournamentId,
+        alphaTournamentTeamId,
+        bravoTournamentTeamId,
+        ruleId: stageRevealRequest.ruleId,
+        stageId: stageRevealRequest.stageId,
+      })
+    : "";
+  const stageRevealMatchupIsLoaded = Boolean(
+    stageRevealDataSelectionKey &&
+    loaded?.dataSelectionKey === stageRevealDataSelectionKey,
+  );
+  const stageRevealMatchup = stageRevealMatchupIsLoaded
+    ? (loaded?.matchup ?? null)
+    : null;
 
   useEffect(() => {
     return subscribeOverlaySelection(setSelection);
@@ -488,7 +550,15 @@ export function Overlay() {
   }, []);
 
   useEffect(() => {
-    if (!stageRevealRequest) {
+    if (!stageRevealRequest || !stageRevealMatchupIsLoaded) {
+      return;
+    }
+
+    if (!stageRevealMatchup) {
+      console.error(
+        "ステージ紹介に必要なルール・ステージ情報を取得できませんでした",
+      );
+      setStageRevealRequest(null);
       return;
     }
 
@@ -516,7 +586,9 @@ export function Overlay() {
         objectUrl = URL.createObjectURL(videoBlob);
         setStageRevealPlayback({
           requestId: stageRevealRequest.requestId,
+          rule: stageRevealMatchup.rule,
           sourceUrl: objectUrl,
+          stage: stageRevealMatchup.stage,
           phase: "ready",
         });
       } catch (error) {
@@ -537,7 +609,7 @@ export function Overlay() {
         URL.revokeObjectURL(objectUrl);
       }
     };
-  }, [stageRevealRequest]);
+  }, [stageRevealMatchup, stageRevealMatchupIsLoaded, stageRevealRequest]);
 
   useEffect(() => {
     if (!stageRevealPlayback) {
@@ -596,22 +668,20 @@ export function Overlay() {
           );
         };
 
-        void video
-          .play()
-          .catch(async (error: unknown) => {
-            console.warn(
-              "音声付き動画の自動再生が拒否されたため、ミュートで再試行します",
-              error,
-            );
-            video.muted = true;
+        void video.play().catch(async (error: unknown) => {
+          console.warn(
+            "音声付き動画の自動再生が拒否されたため、ミュートで再試行します",
+            error,
+          );
+          video.muted = true;
 
-            try {
-              await video.play();
-            } catch (mutedError: unknown) {
-              console.error(mutedError);
-              exitPlayback();
-            }
-          });
+          try {
+            await video.play();
+          } catch (mutedError: unknown) {
+            console.error(mutedError);
+            exitPlayback();
+          }
+        });
       }, videoStartDelay);
 
       const completeTransitionTimeoutId = window.setTimeout(() => {
@@ -714,9 +784,7 @@ export function Overlay() {
       )}
 
       {stageRevealPlayback && (
-        <div
-          className={`overlay-stage-reveal is-${stageRevealPlayback.phase}`}
-        >
+        <div className={`overlay-stage-reveal is-${stageRevealPlayback.phase}`}>
           <video
             aria-label="選択ステージ紹介動画"
             onEnded={() =>
@@ -736,6 +804,18 @@ export function Overlay() {
             src={stageRevealPlayback.sourceUrl}
           />
 
+          <img
+            className="overlay-stage-reveal-vignette"
+            src={STAGE_REVEAL_VIGNETTE_URL}
+            alt=""
+            aria-hidden="true"
+          />
+
+          <StageRevealContent
+            rule={stageRevealPlayback.rule}
+            stage={stageRevealPlayback.stage}
+          />
+
           <div className="overlay-stage-transition" aria-hidden="true">
             <div className="overlay-stage-transition-grid" />
             <div className="overlay-stage-transition-panel is-left" />
@@ -752,11 +832,9 @@ export function Overlay() {
               </span>
               <strong>Next Stage</strong>
               <span className="overlay-stage-transition-meta">
-                INKLING STREAMKIT / ARENA DATA TRANSFER
+                Comming Soon
               </span>
             </div>
-
-            <span className="overlay-stage-transition-mark" />
           </div>
         </div>
       )}

@@ -168,7 +168,9 @@ html[data-view="overlay"] body {
   min-height: 32px;
   padding: 5px 10px;
   color: white;
-  font: 700 12px/1.2 Arial, sans-serif;
+  font:
+    700 12px/1.2 Arial,
+    sans-serif;
   background: var(--dock-accent-color, #8b5cf6);
   border: 0;
   border-radius: 6px;
@@ -708,6 +710,9 @@ html[data-view="overlay"] body {
 }
 
 .overlay-stage-reveal video {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
   display: block;
   width: 100%;
   height: 100%;
@@ -725,9 +730,134 @@ html[data-view="overlay"] body {
   opacity: 1;
 }
 
+.overlay-stage-reveal-vignette {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.overlay-stage-reveal.is-entering .overlay-stage-reveal-vignette {
+  animation: stage-reveal-vignette-enter var(--stage-reveal-enter-duration)
+    var(--stage-reveal-easing) both;
+}
+
+.overlay-stage-reveal.is-playing .overlay-stage-reveal-vignette,
+.overlay-stage-reveal.is-exiting .overlay-stage-reveal-vignette {
+  opacity: 1;
+}
+
+.overlay-stage-reveal-content {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  color: white;
+  opacity: 0;
+  pointer-events: none;
+  will-change: opacity;
+}
+
+.overlay-stage-reveal.is-entering .overlay-stage-reveal-content {
+  animation: stage-reveal-content-enter var(--stage-reveal-enter-duration)
+    var(--stage-reveal-easing) both;
+}
+
+.overlay-stage-reveal.is-playing .overlay-stage-reveal-content {
+  opacity: 1;
+}
+
+.overlay-stage-reveal.is-exiting .overlay-stage-reveal-content {
+  animation: stage-reveal-content-exit var(--stage-reveal-exit-duration)
+    var(--stage-reveal-easing) both;
+}
+
+.overlay-stage-reveal-rule {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  width: 1220px;
+  will-change: transform;
+}
+
+.overlay-stage-reveal.is-entering .overlay-stage-reveal-rule {
+  animation: stage-reveal-rule-enter var(--stage-reveal-enter-duration)
+    var(--stage-reveal-easing) both;
+}
+
+.overlay-stage-reveal-rule strong {
+  display: block;
+  color: rgb(var(--overlay-accent-rgb) / 8%);
+  font-size: 158px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -0.055em;
+  text-shadow: none;
+  white-space: nowrap;
+  -webkit-text-stroke: 4px var(--overlay-accent-color);
+}
+
+.overlay-stage-reveal-rule p {
+  max-width: 1180px;
+  margin: 26px 0 0;
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1.16;
+  letter-spacing: -0.025em;
+}
+
+.overlay-stage-reveal-rule span {
+  display: block;
+  margin-top: 14px;
+  font-size: 66px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0.015em;
+}
+
+.overlay-stage-reveal-stage {
+  position: absolute;
+  right: 24px;
+  bottom: 24px;
+  display: grid;
+  justify-items: end;
+  width: 1320px;
+  text-align: right;
+  will-change: transform;
+}
+
+.overlay-stage-reveal.is-entering .overlay-stage-reveal-stage {
+  animation: stage-reveal-stage-enter var(--stage-reveal-enter-duration)
+    var(--stage-reveal-easing) both;
+}
+
+.overlay-stage-reveal-stage span {
+  margin: 0 0 14px;
+  font-size: 64px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0.035em;
+}
+
+.overlay-stage-reveal-stage strong {
+  max-width: 1320px;
+  color: var(--overlay-accent-color);
+  font-size: 162px;
+  font-weight: 900;
+  line-height: 0.83;
+  letter-spacing: -0.065em;
+  overflow-wrap: normal;
+  text-wrap: balance;
+}
+
 .overlay-stage-transition {
   position: absolute;
   inset: 0;
+  z-index: 3;
   overflow: hidden;
   color: rgb(var(--overlay-ink-rgb));
   opacity: 0;
@@ -749,10 +879,7 @@ html[data-view="overlay"] body {
   inset: 0;
   z-index: 1;
   background-image:
-    linear-gradient(
-      rgb(var(--overlay-accent-rgb) / 12%) 1px,
-      transparent 1px
-    ),
+    linear-gradient(rgb(var(--overlay-accent-rgb) / 12%) 1px, transparent 1px),
     linear-gradient(
       90deg,
       rgb(var(--overlay-accent-rgb) / 10%) 1px,
@@ -778,13 +905,12 @@ html[data-view="overlay"] body {
   z-index: 2;
   width: 68%;
   height: 132%;
-  background:
-    linear-gradient(
-      90deg,
-      rgb(255 255 255 / 99%) 0%,
-      rgb(var(--overlay-paper-rgb) / 99%) 76%,
-      rgb(var(--overlay-accent-rgb) / 16%) 100%
-    );
+  background: linear-gradient(
+    90deg,
+    rgb(255 255 255 / 99%) 0%,
+    rgb(var(--overlay-paper-rgb) / 99%) 76%,
+    rgb(var(--overlay-accent-rgb) / 16%) 100%
+  );
   box-shadow:
     0 0 0 1px rgb(var(--overlay-ink-rgb) / 8%),
     0 0 54px rgb(var(--overlay-accent-rgb) / 24%);
@@ -799,13 +925,12 @@ html[data-view="overlay"] body {
 
 .overlay-stage-transition-panel.is-right {
   right: -18%;
-  background:
-    linear-gradient(
-      270deg,
-      rgb(255 255 255 / 99%) 0%,
-      rgb(var(--overlay-paper-rgb) / 99%) 76%,
-      rgb(var(--overlay-accent-rgb) / 16%) 100%
-    );
+  background: linear-gradient(
+    270deg,
+    rgb(255 255 255 / 99%) 0%,
+    rgb(var(--overlay-paper-rgb) / 99%) 76%,
+    rgb(var(--overlay-accent-rgb) / 16%) 100%
+  );
   border-left: 4px solid var(--overlay-accent-color);
   transform: translate3d(120%, 0, 0) skewX(11deg);
 }
@@ -821,13 +946,13 @@ html[data-view="overlay"] body {
 }
 
 .overlay-stage-reveal.is-exiting .overlay-stage-transition-panel.is-left {
-  animation: stage-transition-panel-left-exit
-    var(--stage-reveal-exit-duration) var(--stage-reveal-easing) both;
+  animation: stage-transition-panel-left-exit var(--stage-reveal-exit-duration)
+    var(--stage-reveal-easing) both;
 }
 
 .overlay-stage-reveal.is-exiting .overlay-stage-transition-panel.is-right {
-  animation: stage-transition-panel-right-exit
-    var(--stage-reveal-exit-duration) var(--stage-reveal-easing) both;
+  animation: stage-transition-panel-right-exit var(--stage-reveal-exit-duration)
+    var(--stage-reveal-easing) both;
 }
 
 .overlay-stage-transition-copy {
@@ -850,8 +975,7 @@ html[data-view="overlay"] body {
 }
 
 .overlay-stage-reveal.is-exiting .overlay-stage-transition-copy {
-  animation: stage-transition-copy-exit var(--stage-reveal-exit-duration)
-    var(--stage-reveal-easing) both;
+  display: none;
 }
 
 .overlay-stage-transition-overline,
@@ -894,21 +1018,6 @@ html[data-view="overlay"] body {
   padding-top: 16px;
   color: rgb(var(--overlay-ink-rgb) / 68%);
   font-size: 16px;
-}
-
-.overlay-stage-transition-mark {
-  position: absolute;
-  top: 31%;
-  left: 50%;
-  z-index: 4;
-  width: 24px;
-  height: 24px;
-  border: 3px solid var(--overlay-accent-color);
-  box-shadow:
-    0 0 0 5px rgb(255 255 255 / 72%),
-    0 10px 26px rgb(var(--overlay-accent-rgb) / 28%);
-  transform: translate3d(-50%, 0, 0) rotate(45deg);
-  opacity: 0.86;
 }
 
 .overlay-stage-transition-scanline {
@@ -1225,6 +1334,66 @@ html[data-view="overlay"] body {
   }
 }
 
+@keyframes stage-reveal-vignette-enter {
+  0%,
+  48% {
+    opacity: 0;
+  }
+
+  66%,
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes stage-reveal-content-enter {
+  0%,
+  62% {
+    opacity: 0;
+  }
+
+  78%,
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes stage-reveal-content-exit {
+  0%,
+  66% {
+    opacity: 1;
+  }
+
+  88%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes stage-reveal-rule-enter {
+  0%,
+  60% {
+    transform: translate3d(-40px, 0, 0);
+  }
+
+  82%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes stage-reveal-stage-enter {
+  0%,
+  64% {
+    transform: translate3d(0, 42px, 0);
+  }
+
+  84%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
 @keyframes stage-transition-enter {
   0%,
   78% {
@@ -1403,8 +1572,8 @@ html[data-view="overlay"] body {
   }
 
   .overlay-stage-reveal.is-entering {
-    animation: stage-reveal-reduced-enter
-      var(--stage-reveal-reduced-duration) linear both;
+    animation: stage-reveal-reduced-enter var(--stage-reveal-reduced-duration)
+      linear both;
   }
 
   .overlay-stage-reveal.is-exiting {
@@ -1414,6 +1583,18 @@ html[data-view="overlay"] body {
 
   .overlay-stage-reveal video {
     opacity: 1;
+    animation: none;
+  }
+
+  .overlay-stage-reveal-vignette,
+  .overlay-stage-reveal-content {
+    opacity: 1;
+    animation: none;
+  }
+
+  .overlay-stage-reveal-rule,
+  .overlay-stage-reveal-stage {
+    transform: none;
     animation: none;
   }
 
