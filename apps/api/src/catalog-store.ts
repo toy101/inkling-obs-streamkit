@@ -1,8 +1,6 @@
-import { requireEnvironmentVariable } from "./env";
 import type { Rule, Stage, Weapon } from "./models/catalog";
 
 const MAX_CATALOG_BYTES = 64 * 1024;
-const CATALOG_TIMEOUT_MS = 10_000;
 
 type CatalogItem = {
   id: string;
@@ -153,69 +151,26 @@ function parseCatalog<T extends CatalogItem>(
   return { items, itemsById };
 }
 
-function parseCatalogBaseUrl(): URL {
-  const value = requireEnvironmentVariable("CATALOG_URL");
-  let url: URL;
-
-  try {
-    url = new URL(value);
-  } catch {
-    throw new Error("CATALOG_URL must be a valid URL.");
-  }
-
-  if (url.protocol !== "https:" && url.protocol !== "http:") {
-    throw new Error("CATALOG_URL must use HTTP or HTTPS.");
-  }
-  url.pathname = url.pathname.endsWith("/") ? url.pathname : `${url.pathname}/`;
-  return url;
-}
-
-function catalogLocation(url: URL): string {
-  return `${url.origin}${url.pathname}`;
-}
-
 async function readCatalogJson(
-  response: Response,
+  catalogUrl: URL,
   catalogName: string,
   location: string,
 ): Promise<unknown> {
-  const contentLength = response.headers.get("content-length");
-  if (contentLength !== null) {
-    const declaredBytes = Number(contentLength);
-    if (Number.isFinite(declaredBytes) && declaredBytes > MAX_CATALOG_BYTES) {
-      throw new Error(
-        `${catalogName} from ${location} exceeds ${MAX_CATALOG_BYTES} bytes.`,
-      );
-    }
+  const catalogFile = Bun.file(catalogUrl);
+  if (!(await catalogFile.exists())) {
+    throw new Error(`${catalogName} is missing from ${location}.`);
+  }
+  if (catalogFile.size > MAX_CATALOG_BYTES) {
+    throw new Error(
+      `${catalogName} from ${location} exceeds ${MAX_CATALOG_BYTES} bytes.`,
+    );
   }
 
-  if (response.body === null) {
-    throw new Error(`${catalogName} from ${location} has no response body.`);
-  }
-
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let receivedBytes = 0;
-
-  while (true) {
-    const result = await reader.read();
-    if (result.done) break;
-
-    receivedBytes += result.value.byteLength;
-    if (receivedBytes > MAX_CATALOG_BYTES) {
-      await reader.cancel();
-      throw new Error(
-        `${catalogName} from ${location} exceeds ${MAX_CATALOG_BYTES} bytes.`,
-      );
-    }
-    chunks.push(result.value);
-  }
-
-  const bytes = new Uint8Array(receivedBytes);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
+  const bytes = new Uint8Array(await catalogFile.arrayBuffer());
+  if (bytes.byteLength > MAX_CATALOG_BYTES) {
+    throw new Error(
+      `${catalogName} from ${location} exceeds ${MAX_CATALOG_BYTES} bytes.`,
+    );
   }
 
   try {
@@ -233,42 +188,10 @@ async function readCatalogJson(
 
 async function loadCatalog<T extends CatalogItem>(
   definition: CatalogDefinition<T>,
-  baseUrl: URL,
 ): Promise<LoadedCatalog<T>> {
-  const catalogUrl = new URL(definition.fileName, baseUrl);
-  const location = catalogLocation(catalogUrl);
-  let response: Response;
-
-  try {
-    response = await fetch(catalogUrl, {
-      headers: { accept: "application/json" },
-      signal: AbortSignal.timeout(CATALOG_TIMEOUT_MS),
-    });
-  } catch (error) {
-    const reason = error instanceof Error ? error.name : "UnknownError";
-    throw new Error(
-      `Failed to fetch ${definition.catalogName} from ${location}: ${reason}`,
-    );
-  }
-
-  if (!response.ok) {
-    throw new Error(
-      `Failed to fetch ${definition.catalogName} from ${location}: HTTP ${response.status}`,
-    );
-  }
-
-  const contentType = response.headers.get("content-type");
-  if (contentType === null || !contentType.includes("application/json")) {
-    throw new Error(
-      `${definition.catalogName} from ${location} did not return application/json.`,
-    );
-  }
-
-  const value = await readCatalogJson(
-    response,
-    definition.catalogName,
-    location,
-  );
+  const catalogUrl = new URL(`./data/${definition.fileName}`, import.meta.url);
+  const location = catalogUrl.pathname;
+  const value = await readCatalogJson(catalogUrl, definition.catalogName, location);
   return { ...parseCatalog(value, definition), location };
 }
 
@@ -282,11 +205,10 @@ function getStore(): CatalogStore {
 export async function initializeCatalogStore(): Promise<void> {
   if (store !== null) return;
 
-  const baseUrl = parseCatalogBaseUrl();
   const [weapons, rules, stages] = await Promise.all([
-    loadCatalog(WEAPON_CATALOG, baseUrl),
-    loadCatalog(RULE_CATALOG, baseUrl),
-    loadCatalog(STAGE_CATALOG, baseUrl),
+    loadCatalog(WEAPON_CATALOG),
+    loadCatalog(RULE_CATALOG),
+    loadCatalog(STAGE_CATALOG),
   ]);
 
   store = { weapons, rules, stages };

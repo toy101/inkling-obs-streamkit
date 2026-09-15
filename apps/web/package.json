@@ -4,8 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
+    "prepare:assets": "bun run ../../scripts/prepare-runtime-assets.ts web",
+    "dev": "bun run prepare:assets && vite",
+    "build": "bun run prepare:assets && tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },

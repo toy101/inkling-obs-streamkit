@@ -3,7 +3,8 @@
   "version": "1.0.50",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "bun run --watch src/index.ts",
+    "prepare:assets": "bun run ../../scripts/prepare-runtime-assets.ts api",
+    "dev": "bun run prepare:assets && bun run --watch src/index.ts",
     "db:dev": "bun run src/db/dev.ts",
     "db:migrate": "bun run src/db/migrate.ts",
     "db:seed": "bun run src/db/seed.ts",

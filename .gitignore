@@ -39,9 +39,11 @@ agent_plan
 # Local Turso database and its journal files
 /apps/api/dev.db*
 /apps/api/.data/
-/apps/api/src/data/
+/apps/api/src/data/*
+!/apps/api/src/data/.gitkeep
 /apps/api/src/db/migrations/
 
 # media
 *.webm
 *.mp4
+/apps/web/public/stage-reveal-vignette.png
