@@ -1,11 +1,11 @@
 import type { InStatement } from "@libsql/client";
 
-import { players } from "../json-data/players";
+import { players } from "../data/players";
 import {
   tournamentRosterEntries,
   tournaments,
   tournamentTeams,
-} from "../json-data/tournaments";
+} from "../data/tournaments";
 import { databaseUrl, db } from "./client";
 import { migrate } from "./migrate";
 

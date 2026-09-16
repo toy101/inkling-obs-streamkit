@@ -22,7 +22,7 @@ export async function migrate() {
   for (const name of migrations) {
     if (applied.has(name)) continue;
 
-    const source = await Bun.file(new URL(`./schema/${name}`, import.meta.url)).text();
+    const source = await Bun.file(new URL(`./migrations/${name}`, import.meta.url)).text();
     // These migrations contain plain SQL statements, without triggers or embedded semicolons.
     const statements = source.split(";").map((sql) => sql.trim()).filter(Boolean);
 

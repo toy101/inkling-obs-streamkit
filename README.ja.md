@@ -114,7 +114,7 @@ Elysia のルートとレスポンススキーマはどちらのモードでも�
 
 Turso の実装は公式の `@libsql/client` を使う形で残している。ローカル DB を使う場合は `apps/api/.env.local` に `API_DATA_SOURCE=turso` を設定し、`bun dev` で各サービスを起動してから、初回だけ別ターミナルで `bun run db:setup` を実行する。ローカルサーバーは `TURSO_DATABASE_URL` から待受先を読み取る。DB ファイルは `apps/api/.data/` 以下に置かれ、Git の追跡対象から外れる。
 
-SQL マイグレーションは `apps/api/src/db/schema/` に置く。`bun run db:setup` は各マイグレーションを一度だけ適用し、プレイヤーと大会の開発データをローカル JSON から投入する。seed のバージョンを記録して2回目以降は DB を上書きしないため、初回投入後に JSON を編集しても既存の Turso DB には反映されない。
+SQL マイグレーションは `apps/api/src/db/migrations/` に置く。`bun run db:setup` は各マイグレーションを一度だけ適用し、プレイヤーと大会の開発データをローカル JSON から投入する。seed のバージョンを記録して2回目以降は DB を上書きしないため、初回投入後に JSON を編集しても既存の Turso DB には反映されない。
 
 将来 Turso Cloud へ接続するときは、Git 管理外の `apps/api/.env.local` に `API_DATA_SOURCE=turso`、`TURSO_DATABASE_URL`、`TURSO_AUTH_TOKEN` を設定する。認証情報は API プロセスだけが保持し、Vite アプリには公開しない。ローカル用の `db:dev` はローカルHTTP URLだけを受け付けるため、Cloud利用時は `bun run dev:apps` を使う。
 

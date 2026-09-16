@@ -68,7 +68,7 @@ bun run spellcheck               # cspell。設定と辞書は cspell.json
 
 Elysia + `@elysia/cors`。web(:5173) と api(:3000) は別 origin なので CORS プラグインは必須。ポート 3000 は `apps/api/src/index.ts` に、接続先 URL は `apps/web/src/lib/api.ts` にハードコードされている。
 
-プレイヤーと大会の既定データソースは `apps/api/src/data/` の `players.json` と `tournaments.json`。`API_DATA_SOURCE=turso` のときだけ `@libsql/client` を通じて Turso から取得する。ブキ・ルール・ステージの各マスターはこの切替から独立し、API起動前に不足しているJSONだけを `CATALOG_URL` から `apps/api/src/data/` へダウンロードする。既存ファイルは再取得しない。APIはローカルの3ファイルを起動時に1回だけ検証し、配列とID索引をメモリへ保持する。SQLには選択したブキIDだけを保存し、ブキ・ルール・ステージのマスターテーブルやカタログへの外部キーは持たない。開発時は `apps/api/src/db/client.ts` の既定値により、`127.0.0.1:8080` のローカル Turso へ接続する。追跡対象のスキーマ SQL は `apps/api/src/db/schema/`、初期データ投入は `apps/api/src/db/seed.ts` が担当する。ローカル DB は `apps/api/.data/` に保存し、Git へ追加しない。
+プレイヤーと大会の既定データソースは `apps/api/src/data/` の `players.json` と `tournaments.json`。`API_DATA_SOURCE=turso` のときだけ `@libsql/client` を通じて Turso から取得する。ブキ・ルール・ステージの各マスターはこの切替から独立し、API起動前に不足しているJSONだけを `CATALOG_URL` から `apps/api/src/data/` へダウンロードする。既存ファイルは再取得しない。APIはローカルの3ファイルを起動時に1回だけ検証し、配列とID索引をメモリへ保持する。SQLには選択したブキIDだけを保存し、ブキ・ルール・ステージのマスターテーブルやカタログへの外部キーは持たない。開発時は `apps/api/src/db/client.ts` の既定値により、`127.0.0.1:8080` のローカル Turso へ接続する。SQL マイグレーションは `apps/api/src/db/migrations/`、初期データ投入は `apps/api/src/db/seed.ts` が担当する。ローカル DB は `apps/api/.data/` に保存し、Git へ追加しない。
 
 ## 規約と落とし穴
 

@@ -114,7 +114,7 @@ The Elysia routes and their response schemas stay the same in both modes. This k
 
 The Turso implementation remains available through the official `@libsql/client`. To use the local database, set `API_DATA_SOURCE=turso` in `apps/api/.env.local`, start the services with `bun dev`, then run `bun run db:setup` in another terminal on the first run. The local server reads its address from `TURSO_DATABASE_URL`; its files live under `apps/api/.data/` and are ignored by Git.
 
-SQL migrations live in `apps/api/src/db/schema/`. `bun run db:setup` applies each migration once and seeds player and tournament development data from the local JSON files. The seed records its version and preserves the database on later runs, so editing JSON after the first seed does not update an existing Turso database.
+SQL migrations live in `apps/api/src/db/migrations/`. `bun run db:setup` applies each migration once and seeds player and tournament development data from the local JSON files. The seed records its version and preserves the database on later runs, so editing JSON after the first seed does not update an existing Turso database.
 
 To connect to Turso Cloud later, set `API_DATA_SOURCE=turso`, `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` in the ignored `apps/api/.env.local` file. Credentials stay in the API process and are never exposed to the Vite app. Use `bun run dev:apps` because the local `db:dev` command accepts local HTTP URLs only.
 
