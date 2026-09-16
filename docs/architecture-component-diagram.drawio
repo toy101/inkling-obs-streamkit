@@ -1,6 +1,6 @@
 <mxfile host="65bd71144e">
     <diagram id="inkling-simple-component-architecture" name="Web API Database">
-        <mxGraphModel dx="3466" dy="1135" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="1000" math="0" shadow="0">
+        <mxGraphModel dx="1810" dy="1135" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="1000" math="0" shadow="0">
             <root>
                 <mxCell id="0"/>
                 <mxCell id="1" parent="0"/>
@@ -28,6 +28,17 @@
                 <mxCell id="webViews" value="同一 Vite アプリ&lt;br&gt;&lt;font style=&quot;font-size:13px&quot;&gt;?view=dock / ?view=overlay&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#efe2ff;strokeColor=#ba91e7;fontColor=#4a2671;fontSize=14;spacing=12;" parent="web" vertex="1">
                     <mxGeometry x="26" y="506" width="408" height="42" as="geometry"/>
                 </mxCell>
+                <mxCell id="eDockApiClient" value="選択データ&lt;div&gt;取得&lt;/div&gt;" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#8c62b8;endArrow=block;endFill=1;fontSize=12;entryX=0;entryY=0.5;entryDx=0;entryDy=0;exitX=0;exitY=0.5;exitDx=0;exitDy=0;" parent="web" source="webDock" target="webApiClient" edge="1">
+                    <mxGeometry x="0.0099" relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="-20" y="132"/>
+                            <mxPoint x="-20" y="424"/>
+                        </Array>
+                        <mxPoint x="36" y="132" as="sourcePoint"/>
+                        <mxPoint x="36" y="424" as="targetPoint"/>
+                        <mxPoint as="offset"/>
+                    </mxGeometry>
+                </mxCell>
                 <mxCell id="api" value="API — apps/api" style="swimlane;html=1;rounded=1;arcSize=16;horizontal=1;startSize=38;fillColor=#edf9f2;strokeColor=#7cc49b;fontColor=#1f6140;fontStyle=1;fontSize=17;whiteSpace=wrap;" parent="1" vertex="1">
                     <mxGeometry x="650" y="150" width="500" height="570" as="geometry"/>
                 </mxCell>
@@ -37,7 +48,7 @@
                 <mxCell id="apiSource" value="data-source.ts&lt;br&gt;&lt;font style=&quot;font-size:13px&quot;&gt;API のデータアクセス境界&lt;br&gt;DB クエリ / カタログ KVS へ接続&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#55a879;fontColor=#172033;fontSize=15;spacing=12;" parent="api" vertex="1">
                     <mxGeometry x="28" y="238" width="210" height="112" as="geometry"/>
                 </mxCell>
-                <mxCell id="apiCatalog" value="catalog-store.ts / KVS&lt;br&gt;&lt;font style=&quot;font-size:13px&quot;&gt;CDN の JSON を取得&lt;br&gt;ID Map として参照&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#55a879;fontColor=#172033;fontSize=15;spacing=12;" vertex="1" parent="api">
+                <mxCell id="apiCatalog" value="catalog-store.ts / KVS&lt;br&gt;&lt;font style=&quot;font-size:13px&quot;&gt;CDN の JSON を取得&lt;br&gt;ID Map として参照&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#55a879;fontColor=#172033;fontSize=15;spacing=12;" parent="api" vertex="1">
                     <mxGeometry x="262" y="238" width="210" height="112" as="geometry"/>
                 </mxCell>
                 <mxCell id="apiDbQueries" value="db/queries.ts&lt;br&gt;&lt;font style=&quot;font-size:13px&quot;&gt;Turso / LibSQL 用クエリ&lt;br&gt;チーム・名簿・プレイヤーを取得&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#55a879;fontColor=#172033;fontSize=15;spacing=12;" parent="api" vertex="1">
@@ -52,16 +63,8 @@
                 <mxCell id="turso" value="Turso / LibSQL&lt;br&gt;&lt;font style=&quot;font-size:13px&quot;&gt;リレーショナルデータ&lt;br&gt;tournaments / teams / roster&lt;br&gt;players / player_weapons / positions&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6a73f;fontColor=#172033;fontSize=15;spacing=12;" parent="data" vertex="1">
                     <mxGeometry x="28" y="112" width="404" height="160" as="geometry"/>
                 </mxCell>
-                <mxCell id="catalogCdn" value="Catalog CDN&lt;br&gt;&lt;font style=&quot;font-size:13px&quot;&gt;weapons.json / rules.json / stages.json&lt;br&gt;API のカタログ KVS の入力&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6a73f;fontColor=#172033;fontSize=15;spacing=12;" vertex="1" parent="data">
+                <mxCell id="catalogCdn" value="Catalog CDN&lt;br&gt;&lt;font style=&quot;font-size:13px&quot;&gt;weapons.json / rules.json / stages.json&lt;br&gt;API のカタログ KVS の入力&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6a73f;fontColor=#172033;fontSize=15;spacing=12;" parent="data" vertex="1">
                     <mxGeometry x="28" y="326" width="404" height="112" as="geometry"/>
-                </mxCell>
-                <mxCell id="eDockApiClient" value="選択データ取得" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#8c62b8;endArrow=block;endFill=1;fontSize=12;" parent="1" source="webDock" target="webApiClient" edge="1">
-                    <mxGeometry relative="1" as="geometry">
-                        <Array as="points">
-                            <mxPoint x="20" y="282"/>
-                            <mxPoint x="20" y="574"/>
-                        </Array>
-                    </mxGeometry>
                 </mxCell>
                 <mxCell id="eOverlayApiClient" value="対戦データ取得" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#8c62b8;endArrow=block;endFill=1;fontSize=12;" parent="1" source="webOverlay" target="webApiClient" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
@@ -93,7 +96,7 @@
                 <mxCell id="eSourceDbQueries" value="turso" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#4d9b71;endArrow=block;endFill=1;fontSize=12;" parent="1" source="apiSource" target="apiDbQueries" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="eSourceCatalog" value="catalog lookup" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#4d9b71;endArrow=block;endFill=1;fontSize=12;" edge="1" parent="1" source="apiSource" target="apiCatalog">
+                <mxCell id="eSourceCatalog" value="catalog lookup" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#4d9b71;endArrow=block;endFill=1;fontSize=12;" parent="1" source="apiSource" target="apiCatalog" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
                 <mxCell id="eDbTurso" value="SQL" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#d6a73f;endArrow=block;endFill=1;fontSize=12;" parent="1" source="apiDbQueries" target="turso" edge="1">
@@ -105,10 +108,10 @@
                         </Array>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="eCatalogRoutes" value="rules / stages / weapons" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#4d9b71;endArrow=block;endFill=1;fontSize=12;" edge="1" parent="1" source="apiCatalog" target="apiRoutes">
+                <mxCell id="eCatalogRoutes" value="rules / stages / weapons" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#4d9b71;endArrow=block;endFill=1;fontSize=12;" parent="1" source="apiCatalog" target="apiRoutes" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="eCdnCatalog" value="JSON download" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;strokeColor=#d6a73f;endArrow=block;endFill=1;fontSize=12;" edge="1" parent="1" source="catalogCdn" target="apiCatalog">
+                <mxCell id="eCdnCatalog" value="JSON download" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;strokeColor=#d6a73f;endArrow=block;endFill=1;fontSize=12;" parent="1" source="catalogCdn" target="apiCatalog" edge="1">
                     <mxGeometry relative="1" as="geometry">
                         <Array as="points">
                             <mxPoint x="1240" y="532"/>
