@@ -1,7 +1,11 @@
 import type { InStatement } from "@libsql/client";
 
 import { players } from "../data/players";
-import { tournamentRosterEntries, tournaments, tournamentTeams } from "../data/tournaments";
+import {
+  tournamentRosterEntries,
+  tournaments,
+  tournamentTeams,
+} from "../data/tournaments";
 import { databaseUrl, db } from "./client";
 import { migrate } from "./migrate";
 

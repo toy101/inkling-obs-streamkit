@@ -93,6 +93,8 @@ API は既定で `apps/api/src/data/` 以下のプレイヤー・大会 JSON を
 
 テストはまだない。
 
+Pull Request では、クリーンな checkout 上で `quality` チェックを実行する。Bun 1.4.2 と frozen lockfile を使い、Git管理外の実行時パスには決定的なfixtureを用意してから、API の型チェック、web の lint、web の build、spellcheck を順に検査する。追跡対象の TypeScript アダプターとスキーマ SQL を使うため、`.env.local`、ローカル DB、CDN、イカクロ API には依存しない。
+
 ## 仕組み
 
 **型は API から web へ流れる。** `apps/api/src/index.ts` が `type App = typeof app` を export し、`apps/web/src/lib/api.ts` がそこから Eden Treaty クライアントを組み立てる。web はワークスペースを越えて API のソースの型を import しているので、ルートを変えるとフロント側の型が即座に変わる。リクエストは直接の `fetch` ではなく、`api.overlay.matchup.get()` などの型付き呼び出しを通す。
@@ -132,7 +134,7 @@ SQL マイグレーションは `apps/api/src/db/migrations/` に置く。`bun r
 
 ルールは `id`、日本語の `name`、英語の `en`、`description`、ステージは `id`、日本語の `name`、英語の `en` を持つ。API起動前に `scripts/prepare-runtime-assets.ts` が `apps/api/src/data/` 以下の3ファイルを確認する。不足しているファイルだけを `CATALOG_URL` で設定したCDNのベースURLから取得し、既存ファイルがあればリクエストしない。保存前にContent-Type、UTF-8 JSON配列、ファイルサイズを検証する。その後、APIはローカルファイルを再度検証して1回だけ読み込み、表示順を保つ配列とID索引をメモリへ保持する。ダウンロードまたは検証に失敗した場合は、不完全なデータを配信せず起動を失敗させる。
 
-ローカルの [`apps/api/src/data/`](./apps/api/src/data/) にある `weapons.json`、`rules.json`、`stages.json` は実行時の入力で、Gitの追跡対象外。更新時はリモートカタログを公開し、同じURLを使う場合はCDNキャッシュをパージしてから、対象のローカルファイルだけを削除してAPIを再起動する。準備スクリプトが再度ダウンロードする。
+ローカルの [`apps/api/src/data/`](./apps/api/src/data/) にある `weapons.json`、`rules.json`、`stages.json` は実行時入力で、Gitの追跡対象外。更新時はリモートカタログを公開し、対象のローカルファイルだけを削除してAPIを再起動する。準備スクリプトが不足ファイルを再度ダウンロードする。CIではCDNを使わず、`scripts/prepare-ci-fixtures.ts` が品質チェック前にこのGit管理外のパスへ決定的な小さなfixtureを書き込む。
 
 ブキ画像は `/overlay/matchup` の読み込み時にまとめて解決する。その対戦で使う数値のブキIDを重複排除し、`IKACLO_API_ORIGIN` で設定したHTTPS originから返されたブキ情報と画像URLを検証する。各IDへのリクエストはAPIプロセスの存続中に最大1回で、同時に複数の対戦取得が走った場合は処理中のリクエストを共有し、以後のOverlay再読み込みや対戦変更ではキャッシュ済みの結果を再利用する。失敗結果も保持するためポーリングや自動再試行は行わず、APIを再起動するとキャッシュは消える。ブラウザはカルーセル4画面をすべてマウントしたまま、ブキ画像要素だけを段階的に有効化する。初期表示では次の画面であるTeam A分だけを読み込み、Team Aが表示された時点でTeam B分を表示の8秒前から読み込む。一度有効化した画像はマウントしたままなので、スライド切替でブキ詳細を再取得したり読み込み済み画像を再マウントしたりしない。Dockでアクセントカラーだけを変えた場合も、対戦データは再取得しない。
 

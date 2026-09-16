@@ -339,11 +339,15 @@ function OverlayCarousel({
       return;
     }
 
-    setCarouselState((current) =>
-      current.animateActiveSlide
-        ? { ...current, animateActiveSlide: false }
-        : current,
-    );
+    const timeoutId = window.setTimeout(() => {
+      setCarouselState((current) =>
+        current.animateActiveSlide
+          ? { ...current, animateActiveSlide: false }
+          : current,
+      );
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [suspended]);
 
   useEffect(() => {
@@ -558,14 +562,20 @@ export function Overlay() {
       console.error(
         "ステージ紹介に必要なルール・ステージ情報を取得できませんでした",
       );
-      setStageRevealRequest(null);
-      return;
+      const timeoutId = window.setTimeout(
+        () => setStageRevealRequest(null),
+        0,
+      );
+      return () => window.clearTimeout(timeoutId);
     }
 
     const controller = new AbortController();
     let objectUrl: string | null = null;
 
-    setStageRevealPlayback(null);
+    const clearPlaybackTimeoutId = window.setTimeout(
+      () => setStageRevealPlayback(null),
+      0,
+    );
 
     const downloadStageVideo = async () => {
       try {
@@ -604,6 +614,7 @@ export function Overlay() {
     void downloadStageVideo();
 
     return () => {
+      window.clearTimeout(clearPlaybackTimeoutId);
       controller.abort();
       if (objectUrl) {
         URL.revokeObjectURL(objectUrl);
@@ -832,7 +843,7 @@ export function Overlay() {
               </span>
               <strong>Next Stage</strong>
               <span className="overlay-stage-transition-meta">
-                Comming Soon
+                Coming Soon
               </span>
             </div>
           </div>

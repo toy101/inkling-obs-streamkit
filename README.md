@@ -93,6 +93,8 @@ Keep Chrome's page zoom at 100% when comparing the preview against OBS, and do n
 
 There are no tests yet.
 
+Pull requests run the `quality` check on a clean checkout. It uses Bun 1.4.2, installs with the frozen lockfile, prepares deterministic fixtures inside the ignored runtime paths, and runs the API type check, web lint, web build and spellcheck. The tracked TypeScript adapters and schema SQL make this check independent of `.env.local`, the local database, the CDN and the Ikaclo API.
+
 ## How it works
 
 **Types flow from the API into the web app.** `apps/api/src/index.ts` exports `type App = typeof app`, and `apps/web/src/lib/api.ts` builds an Eden Treaty client from it. The web app imports the API's source types across the workspace, so changing a route immediately changes the types on the front end. Requests go through typed calls such as `api.overlay.matchup.get()` rather than direct `fetch` calls.
@@ -132,7 +134,7 @@ The weapon catalog contains 173 Splatoon 3 weapons, with only the Ikaclo API ID 
 
 Rules contain `id`, Japanese `name`, English `en` and `description`; stages contain `id`, Japanese `name` and English `en`. Before the API starts, `scripts/prepare-runtime-assets.ts` checks for all three files under `apps/api/src/data/`. It downloads only missing files from the CDN base URL configured by `CATALOG_URL`; existing files cause no request. The download validates the content type, UTF-8 JSON array and size before writing the file. The API then validates and loads those local files exactly once before it starts listening, retaining each ordered list and its ID index in memory. If downloading or validation fails, startup fails instead of serving incomplete data.
 
-The local `weapons.json`, `rules.json` and `stages.json` under [`apps/api/src/data/`](./apps/api/src/data/) are the runtime inputs and remain outside Git. To update one, publish the remote catalog, purge its CDN cache when reusing the same URL, delete only the corresponding local file, and restart the API. The preparation script will download it again.
+The local `weapons.json`, `rules.json` and `stages.json` under [`apps/api/src/data/`](./apps/api/src/data/) are runtime inputs and remain outside Git. To update one, publish the remote catalog, remove only the corresponding local file, and restart the API. The preparation script downloads the missing file again. CI does not use the CDN: `scripts/prepare-ci-fixtures.ts` writes small deterministic fixtures into these ignored paths before the quality checks.
 
 Weapon images are resolved together when `/overlay/matchup` loads. The API collects the distinct numeric weapon IDs in that matchup and calls the HTTPS origin configured by `IKACLO_API_ORIGIN`, validating both the weapon and returned image URL. Each ID is requested at most once during the lifetime of the API process: concurrent matchups share the same in-flight request, and later Overlay reloads or matchup changes reuse its cached result. Failed lookups are cached too, so there is no polling or automatic retry; restarting the API clears the cache. The browser keeps all four carousel slides mounted, but activates weapon image elements progressively: Team A, the next slide, loads initially, and Team B starts loading when Team A becomes active, one full slide interval before it is shown. Once activated, images remain mounted, so changing slides does not refetch weapon details or remount loaded images. Changing only the Dock accent color also does not reload matchup data.
 
