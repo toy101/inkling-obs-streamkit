@@ -7,7 +7,7 @@ import type {
 } from "./models/overlay";
 import type { PlayerProfile } from "./models/player";
 import type { Tournament, TournamentTeam } from "./models/tournament";
-import * as jsonDataSource from "./data/queries";
+import * as jsonDataSource from "./json-data/queries";
 import * as tursoDataSource from "./db/queries";
 import {
   findRule,
