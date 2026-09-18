@@ -1,0 +1,58 @@
+[
+  {
+    "id": "player-1",
+    "displayName": "Player One",
+    "iconUrl": null,
+    "position": null,
+    "weaponIds": ["1"]
+  },
+  {
+    "id": "player-2",
+    "displayName": "Player Two",
+    "iconUrl": null,
+    "position": null,
+    "weaponIds": ["1"]
+  },
+  {
+    "id": "player-3",
+    "displayName": "Player Three",
+    "iconUrl": null,
+    "position": null,
+    "weaponIds": ["1"]
+  },
+  {
+    "id": "player-4",
+    "displayName": "Player Four",
+    "iconUrl": null,
+    "position": null,
+    "weaponIds": ["1"]
+  },
+  {
+    "id": "player-5",
+    "displayName": "Player Five",
+    "iconUrl": null,
+    "position": null,
+    "weaponIds": ["1"]
+  },
+  {
+    "id": "player-6",
+    "displayName": "Player Six",
+    "iconUrl": null,
+    "position": null,
+    "weaponIds": ["1"]
+  },
+  {
+    "id": "player-7",
+    "displayName": "Player Seven",
+    "iconUrl": null,
+    "position": null,
+    "weaponIds": ["1"]
+  },
+  {
+    "id": "player-8",
+    "displayName": "Player Eight",
+    "iconUrl": null,
+    "position": null,
+    "weaponIds": ["1"]
+  }
+]

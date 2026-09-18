@@ -1,0 +1,129 @@
+{
+  "tournaments": [
+    {
+      "id": "tournament-a",
+      "organizerUserId": "organizer-1",
+      "name": "Tournament One",
+      "status": "locked",
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "updatedAt": "2026-01-01T00:00:00.000Z"
+    },
+    {
+      "id": "tournament-b",
+      "organizerUserId": "organizer-1",
+      "name": "Tournament Two",
+      "status": "locked",
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "updatedAt": "2026-01-01T00:00:00.000Z"
+    }
+  ],
+  "tournamentTeams": [
+    {
+      "id": "team-alpha",
+      "tournamentId": "tournament-a",
+      "name": "Alpha",
+      "displayOrder": 1,
+      "rosterLockedAt": "2026-01-01T00:00:00.000Z"
+    },
+    {
+      "id": "team-bravo",
+      "tournamentId": "tournament-a",
+      "name": "Bravo",
+      "displayOrder": 2,
+      "rosterLockedAt": "2026-01-01T00:00:00.000Z"
+    },
+    {
+      "id": "team-charlie",
+      "tournamentId": "tournament-b",
+      "name": "Charlie",
+      "displayOrder": 1,
+      "rosterLockedAt": "2026-01-01T00:00:00.000Z"
+    }
+  ],
+  "tournamentRosterEntries": [
+    {
+      "id": "alpha-1",
+      "tournamentTeamId": "team-alpha",
+      "registeredName": "Alpha One",
+      "displayOrder": 1,
+      "playerId": "player-1"
+    },
+    {
+      "id": "alpha-2",
+      "tournamentTeamId": "team-alpha",
+      "registeredName": "Alpha Two",
+      "displayOrder": 2,
+      "playerId": "player-2"
+    },
+    {
+      "id": "alpha-3",
+      "tournamentTeamId": "team-alpha",
+      "registeredName": "Alpha Three",
+      "displayOrder": 3,
+      "playerId": "player-3"
+    },
+    {
+      "id": "alpha-4",
+      "tournamentTeamId": "team-alpha",
+      "registeredName": "Alpha Four",
+      "displayOrder": 4,
+      "playerId": "player-4"
+    },
+    {
+      "id": "bravo-1",
+      "tournamentTeamId": "team-bravo",
+      "registeredName": "Bravo One",
+      "displayOrder": 1,
+      "playerId": "player-5"
+    },
+    {
+      "id": "bravo-2",
+      "tournamentTeamId": "team-bravo",
+      "registeredName": "Bravo Two",
+      "displayOrder": 2,
+      "playerId": "player-6"
+    },
+    {
+      "id": "bravo-3",
+      "tournamentTeamId": "team-bravo",
+      "registeredName": "Bravo Three",
+      "displayOrder": 3,
+      "playerId": "player-7"
+    },
+    {
+      "id": "bravo-4",
+      "tournamentTeamId": "team-bravo",
+      "registeredName": "Bravo Four",
+      "displayOrder": 4,
+      "playerId": "player-8"
+    },
+    {
+      "id": "charlie-1",
+      "tournamentTeamId": "team-charlie",
+      "registeredName": "Charlie One",
+      "displayOrder": 1,
+      "playerId": "player-1"
+    },
+    {
+      "id": "charlie-2",
+      "tournamentTeamId": "team-charlie",
+      "registeredName": "Charlie Two",
+      "displayOrder": 2,
+      "playerId": "player-2"
+    },
+    {
+      "id": "charlie-3",
+      "tournamentTeamId": "team-charlie",
+      "registeredName": "Charlie Three",
+      "displayOrder": 3,
+      "playerId": "player-3"
+    },
+    {
+      "id": "charlie-4",
+      "tournamentTeamId": "team-charlie",
+      "registeredName": "Charlie Four",
+      "displayOrder": 4,
+      "playerId": "player-4"
+    }
+  ]
+}
