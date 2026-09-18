@@ -9,6 +9,7 @@
     ".omc/**",
     ".serena/**",
     "bun.lock",
+    "**/*.drawio",
     "**/*.svg",
     "**/*.png"
   ],
