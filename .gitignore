@@ -9,6 +9,8 @@ dist
 # code coverage
 coverage
 *.lcov
+/apps/web/playwright-report/
+/apps/web/test-results/
 
 # logs
 logs
