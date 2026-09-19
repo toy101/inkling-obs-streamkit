@@ -86,6 +86,7 @@ API は既定で `apps/api/src/data/` 以下のプレイヤー・大会 JSON を
 | `bun run --filter web dev` | 片方のワークスペースだけ起動する（`api` も同様）。 |
 | `bun run --filter web lint` | ESLint。lint 設定があるのは web のみ。 |
 | `bun run --filter web build` | `tsc -b && vite build`。唯一の型チェック経路。 |
+| `bun run openapi:build` | APIを起動せず、実行時データも読み込まずに、`dist/openapi/` 以下へ静的な Scalar ビューアーと `openapi.yaml` を生成する。 |
 | `bun run db:dev` | 永続化するローカル Turso だけを `127.0.0.1:8080` で起動する。 |
 | `bun run db:setup` | Turso 利用時に未適用のマイグレーションを実行し、開発データを一度だけ投入する。 |
 | `bun run db:migrate` | 開発データを投入せず、未適用の SQL マイグレーションだけを実行する。 |
@@ -94,6 +95,12 @@ API は既定で `apps/api/src/data/` 以下のプレイヤー・大会 JSON を
 テストはまだない。
 
 Pull Request では、クリーンな checkout 上で `quality` チェックを実行する。Bun 1.4.2 と frozen lockfile を使い、Git管理外の実行時パスには決定的なfixtureを用意してから、API の型チェック、web の lint、web の build、spellcheck を順に検査する。追跡対象の TypeScript アダプターとスキーマ SQL を使うため、`.env.local`、ローカル DB、CDN、イカクロ API には依存しない。
+
+## APIリファレンス
+
+Elysiaのルートスキーマから`@elysia/openapi`でOpenAPI文書を生成する。API変更時は専用のGitHub Pagesワークフローが文書を再生成し、静的なScalarビューアーを <https://toy101.github.io/inkling-obs-streamkit/> へ公開する。元のYAMLは <https://toy101.github.io/inkling-obs-streamkit/openapi.yaml> から直接確認できる。どちらの閲覧にもAPIの起動は不要。
+
+リポジトリ設定では、GitHub Pagesの公開元に **GitHub Actions** を指定する必要がある。生成時は実行されないデータソースのスタブでスキーマ専用のappを組み立てるため、ローカルJSONを読み込まず、Turso、カタログCDN、イカクロAPIにも接続しない。
 
 ## 仕組み
 

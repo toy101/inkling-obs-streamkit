@@ -86,6 +86,7 @@ Keep Chrome's page zoom at 100% when comparing the preview against OBS, and do n
 | `bun run --filter web dev` | Runs one workspace alone (`api` works the same way). |
 | `bun run --filter web lint` | ESLint. Only the web app has a lint setup. |
 | `bun run --filter web build` | `tsc -b && vite build`. The only type-check path. |
+| `bun run openapi:build` | Generates the static Scalar viewer and `openapi.yaml` under `dist/openapi/` without starting the API or loading runtime data. |
 | `bun run db:dev` | Runs only the persistent local Turso server on `127.0.0.1:8080`. |
 | `bun run db:setup` | Applies pending migrations and inserts development data once for Turso mode. |
 | `bun run db:migrate` | Applies pending SQL migrations without seeding data. |
@@ -94,6 +95,12 @@ Keep Chrome's page zoom at 100% when comparing the preview against OBS, and do n
 There are no tests yet.
 
 Pull requests run the `quality` check on a clean checkout. It uses Bun 1.4.2, installs with the frozen lockfile, prepares deterministic fixtures inside the ignored runtime paths, and runs the API type check, web lint, web build and spellcheck. The tracked TypeScript adapters and schema SQL make this check independent of `.env.local`, the local database, the CDN and the Ikaclo API.
+
+## API reference
+
+The Elysia route schemas generate an OpenAPI document through `@elysia/openapi`. A dedicated GitHub Pages workflow rebuilds the document on API changes and publishes a static Scalar viewer at <https://toy101.github.io/inkling-obs-streamkit/>. The source YAML is available at <https://toy101.github.io/inkling-obs-streamkit/openapi.yaml>. The API does not need to be running to view either file.
+
+GitHub Pages must use **GitHub Actions** as its publishing source in the repository settings. The generator builds a schema-only app with non-executable data-source stubs, so it does not load local JSON or contact Turso, the catalog CDN or the Ikaclo API.
 
 ## How it works
 
