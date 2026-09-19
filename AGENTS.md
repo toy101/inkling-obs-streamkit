@@ -30,10 +30,10 @@ bun run spellcheck               # cspell。設定と辞書は cspell.json
 
 動作確認用 URL:
 
-| 用途 | URL |
-| --- | --- |
-| 開発時のプレビュー | `http://localhost:5173/?view=debug` |
-| OBS カスタムブラウザドック | `http://localhost:5173/?view=dock` |
+| 用途                            | URL                                   |
+| ------------------------------- | ------------------------------------- |
+| 開発時のプレビュー              | `http://localhost:5173/?view=debug`   |
+| OBS カスタムブラウザドック      | `http://localhost:5173/?view=dock`    |
 | OBS ブラウザソース（1920×1080） | `http://localhost:5173/?view=overlay` |
 
 ## アーキテクチャ
@@ -80,3 +80,7 @@ Elysia + `@elysia/cors`。web(:5173) と api(:3000) は別 origin なので CORS
 - `packages/` は空。将来の共通ドメイン型（player / team / match / stage など）用の予約枠で、API レスポンス型の共有目的で作る必要はない（Eden が推論するため）。
 - `apps/web/src/App.css` と `src/assets/*` は Vite テンプレートの残骸で、どこからも import されていない。
 - `agent_plan/`（.gitignore 済み）に設計の背景と今後の拡張方針をまとめた引き継ぎメモがある。判断の根拠を辿るときはここが最も詳しい。
+
+## Code Review Rules
+
+Always review in Japanese.
