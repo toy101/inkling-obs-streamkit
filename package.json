@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "bun run --parallel db:dev dev:apps",
     "dev:apps": "bun run --parallel --filter './apps/*' dev",
+    "openapi:build": "bun run scripts/generate-openapi.ts",
     "spellcheck": "cspell lint . --no-progress",
     "db:dev": "bun run --filter api db:dev",
     "db:migrate": "bun run --filter api db:migrate",
@@ -19,6 +20,7 @@
   "devDependencies": {
     "@types/bun": "latest",
     "cspell": "^10.2.2",
-    "typescript": "~6.0.2"
+    "typescript": "~6.0.2",
+    "yaml": "^2.9.1"
   }
 }

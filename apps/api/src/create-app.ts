@@ -1,6 +1,8 @@
 import { cors } from "@elysia/cors";
+import { openapi } from "@elysia/openapi";
 import { Elysia } from "elysia";
 
+import apiPackage from "../package.json" with { type: "json" };
 import type { DataSource } from "./create-data-source";
 import { models } from "./models";
 
@@ -19,6 +21,16 @@ export function createApp({ dataSource, webOrigins }: CreateAppOptions) {
       }),
     )
     .use(models)
+    .use(
+      openapi({
+        documentation: {
+          info: {
+            title: "Inkling OBS Streamkit API",
+            version: apiPackage.version,
+          },
+        },
+      }),
+    )
     .get("/weapons", () => dataSource.listWeapons(), {
       response: "weapon.list",
     })
