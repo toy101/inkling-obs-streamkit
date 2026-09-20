@@ -6,11 +6,17 @@ import type {
   TournamentTeam,
 } from "../src/lib/api";
 
-import overlayMatchupFixture from "./fixtures/overlay-matchup.json";
-import rulesFixture from "./fixtures/rules.json";
-import stagesFixture from "./fixtures/stages.json";
-import teamsFixture from "./fixtures/tournament-teams.json";
-import tournamentsFixture from "./fixtures/tournaments.json";
+import overlayMatchupFixture from "./fixtures/overlay-matchup.json" with {
+  type: "json",
+};
+import rulesFixture from "./fixtures/rules.json" with { type: "json" };
+import stagesFixture from "./fixtures/stages.json" with { type: "json" };
+import teamsFixture from "./fixtures/tournament-teams.json" with {
+  type: "json",
+};
+import tournamentsFixture from "./fixtures/tournaments.json" with {
+  type: "json",
+};
 
 export const fixtureData = {
   tournaments: tournamentsFixture as unknown as Tournament[],
