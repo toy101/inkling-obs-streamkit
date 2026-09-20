@@ -1,0 +1,27 @@
+{
+  "tournament-a": [
+    {
+      "id": "team-alpha",
+      "tournamentId": "tournament-a",
+      "name": "Alpha",
+      "displayOrder": 1,
+      "rosterLockedAt": "2026-01-01T00:00:00.000Z"
+    },
+    {
+      "id": "team-bravo",
+      "tournamentId": "tournament-a",
+      "name": "Bravo",
+      "displayOrder": 2,
+      "rosterLockedAt": "2026-01-01T00:00:00.000Z"
+    }
+  ],
+  "tournament-b": [
+    {
+      "id": "team-charlie",
+      "tournamentId": "tournament-b",
+      "name": "Charlie",
+      "displayOrder": 1,
+      "rosterLockedAt": "2026-01-01T00:00:00.000Z"
+    }
+  ]
+}

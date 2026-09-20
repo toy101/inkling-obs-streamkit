@@ -1,19 +1,6 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
-const API_ORIGIN = "http://127.0.0.1:3000";
-
-test("Debug画面でDockとOverlayが起動する", async ({ page }) => {
-  await page.route(`${API_ORIGIN}/**`, async (route) => {
-    await route.fulfill({
-      status: 200,
-      headers: {
-        "access-control-allow-origin": "*",
-        "content-type": "application/json; charset=utf-8",
-      },
-      body: "[]",
-    });
-  });
-
+test("Debug画面でDockとOverlayが起動する", async ({ page, api }) => {
   await page.goto("/?view=debug");
 
   const dock = page.getByRole("complementary", {
@@ -33,4 +20,11 @@ test("Debug画面でDockとOverlayが起動する", async ({ page }) => {
     'iframe[title="1920 × 1080 Overlay プレビュー"]',
   );
   await expect(overlay.locator("main.overlay")).toBeVisible();
+
+  await expect.poll(() => api.requestCount("/tournaments")).toBeGreaterThan(0);
+  await expect
+    .poll(() => api.requestCount("/tournaments/:id/teams"))
+    .toBeGreaterThan(0);
+  await expect.poll(() => api.requestCount("/rules")).toBeGreaterThan(0);
+  await expect.poll(() => api.requestCount("/stages")).toBeGreaterThan(0);
 });
