@@ -5,7 +5,7 @@ import { fixtureData } from "./fixture-data";
 
 const API_ORIGIN = "http://127.0.0.1:3000";
 
-type ApiEndpoint =
+export type ApiEndpoint =
   | "/tournaments"
   | "/tournaments/:id/teams"
   | "/rules"
@@ -39,7 +39,7 @@ export type ApiMock = {
   readonly allowConsoleError: (matcher: ConsoleErrorMatcher) => void;
 };
 
-type InstalledApiMock = ApiMock & {
+export type InstalledApiMock = ApiMock & {
   readonly assertNoBrowserErrors: () => void;
 };
 
@@ -109,7 +109,7 @@ function isAllowedConsoleError(
   );
 }
 
-async function createApiMock(page: Page): Promise<InstalledApiMock> {
+export async function installApiMock(page: Page): Promise<InstalledApiMock> {
   const requests: ApiRequestRecord[] = [];
   const matchupRequests: OverlayMatchupRequest[] = [];
   const browserErrors: string[] = [];
@@ -219,7 +219,7 @@ type Fixtures = {
 export const test = base.extend<Fixtures>({
   api: [
     async ({ page }, use) => {
-      const apiMock = await createApiMock(page);
+      const apiMock = await installApiMock(page);
       await use(apiMock);
       apiMock.assertNoBrowserErrors();
     },

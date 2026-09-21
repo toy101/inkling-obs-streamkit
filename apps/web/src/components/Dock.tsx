@@ -196,7 +196,10 @@ export function Dock() {
   }, []);
 
   useEffect(() => {
-    if (!selectedTournamentId) {
+    if (
+      !selectedTournamentId ||
+      !tournaments.some((tournament) => tournament.id === selectedTournamentId)
+    ) {
       return;
     }
 
@@ -247,7 +250,7 @@ export function Dock() {
     return () => {
       cancelled = true;
     };
-  }, [selectedTournamentId]);
+  }, [selectedTournamentId, tournaments]);
 
   const handleTournamentChange = (tournamentId: string) => {
     setTeams([]);
@@ -262,12 +265,22 @@ export function Dock() {
     submittedSelection.alphaTournamentTeamId !== alphaTeamId ||
     submittedSelection.bravoTournamentTeamId !== bravoTeamId,
   );
+  const submittedRuleId = rules.some(
+    (rule) => rule.id === submittedSelection?.ruleId,
+  )
+    ? (submittedSelection?.ruleId ?? ruleId)
+    : ruleId;
+  const submittedStageId = stages.some(
+    (stage) => stage.id === submittedSelection?.stageId,
+  )
+    ? (submittedSelection?.stageId ?? stageId)
+    : stageId;
   const canSubmitMatchup = Boolean(
     selectedTournamentId &&
     alphaTeamId &&
     bravoTeamId &&
-    (submittedSelection?.ruleId || ruleId) &&
-    (submittedSelection?.stageId || stageId) &&
+    submittedRuleId &&
+    submittedStageId &&
     isAccentColor(accentColor) &&
     alphaTeamId !== bravoTeamId &&
     isMatchupDirty,
@@ -298,8 +311,8 @@ export function Dock() {
       tournamentId: selectedTournamentId,
       alphaTournamentTeamId: alphaTeamId,
       bravoTournamentTeamId: bravoTeamId,
-      ruleId: submittedSelection?.ruleId || ruleId,
-      stageId: submittedSelection?.stageId || stageId,
+      ruleId: submittedRuleId,
+      stageId: submittedStageId,
       accentColor: submittedSelection?.accentColor ?? DEFAULT_ACCENT_COLOR,
       matchLabel: submittedSelection?.matchLabel ?? "",
     };
@@ -369,6 +382,7 @@ export function Dock() {
           <label className="dock-field">
             <span>大会</span>
             <select
+              aria-label="大会"
               value={selectedTournamentId}
               onChange={(event) => handleTournamentChange(event.target.value)}
             >
@@ -383,6 +397,7 @@ export function Dock() {
           <label className="dock-field">
             <span>ALPHA</span>
             <select
+              aria-label="ALPHA"
               value={alphaTeamId}
               disabled={teams.length < 2}
               onChange={(event) => setAlphaTeamId(event.target.value)}
@@ -402,6 +417,7 @@ export function Dock() {
           <label className="dock-field">
             <span>BRAVO</span>
             <select
+              aria-label="BRAVO"
               value={bravoTeamId}
               disabled={teams.length < 2}
               onChange={(event) => setBravoTeamId(event.target.value)}
@@ -458,6 +474,7 @@ export function Dock() {
           <label className="dock-field">
             <span>ルール</span>
             <select
+              aria-label="ルール"
               value={ruleId}
               disabled={!submittedSelection || rules.length === 0}
               onChange={(event) => setRuleId(event.target.value)}
@@ -473,6 +490,7 @@ export function Dock() {
           <label className="dock-field">
             <span>ステージ</span>
             <select
+              aria-label="ステージ"
               value={stageId}
               disabled={!submittedSelection || stages.length === 0}
               onChange={(event) => setStageId(event.target.value)}
