@@ -43,6 +43,13 @@ const tournamentTeams: Record<string, TournamentTeam[]> = {
       displayOrder: 2,
       rosterLockedAt: "2026-01-01T00:00:00.000Z",
     },
+    {
+      id: "team-charlie",
+      tournamentId: "tournament-a",
+      name: "Charlie",
+      displayOrder: 3,
+      rosterLockedAt: "2026-01-01T00:00:00.000Z",
+    },
   ],
   "tournament-b": [
     {
