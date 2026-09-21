@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 
 const DEFAULT_CDN_BASE_URL =
   "https://inkling-obs-streamkit.toy101-mov.org/";
-const MAX_CATALOG_BYTES = 64 * 1024;
+export const MAX_CATALOG_BYTES = 64 * 1024;
 
 type RuntimeAssetTarget = "api" | "web";
 
@@ -15,13 +15,25 @@ type RuntimeAsset = {
   validate(bytes: Uint8Array): void;
 };
 
+export type AssetFetcher = (
+  input: RequestInfo | URL,
+  init?: RequestInit,
+) => Promise<Response>;
+
+export type PrepareAssetsOptions = {
+  catalogBaseUrl?: string;
+  destinationDirectory?: string;
+  fetcher?: AssetFetcher;
+};
+
 function parseTarget(value: string | undefined): RuntimeAssetTarget {
   if (value === "api" || value === "web") return value;
   throw new Error("Usage: bun run scripts/prepare-runtime-assets.ts <api|web>");
 }
 
-function parseCatalogBaseUrl(): URL {
-  const value = process.env.CATALOG_URL?.trim() || DEFAULT_CDN_BASE_URL;
+export function parseCatalogBaseUrl(
+  value = process.env.CATALOG_URL?.trim() || DEFAULT_CDN_BASE_URL,
+): URL {
   let url: URL;
 
   try {
@@ -55,7 +67,10 @@ function validatePng(bytes: Uint8Array): void {
   }
 }
 
-function getAssets(target: RuntimeAssetTarget): RuntimeAsset[] {
+function getAssets(
+  target: RuntimeAssetTarget,
+  options: PrepareAssetsOptions,
+): RuntimeAsset[] {
   const workspaceRoot = resolve(import.meta.dir, "..");
 
   if (target === "web") {
@@ -63,8 +78,8 @@ function getAssets(target: RuntimeAssetTarget): RuntimeAsset[] {
       {
         contentType: "image/png",
         destinationPath: resolve(
-          workspaceRoot,
-          "apps/web/public/stage-reveal-vignette.png",
+          options.destinationDirectory ?? resolve(workspaceRoot, "apps/web/public"),
+          "stage-reveal-vignette.png",
         ),
         maxBytes: 5 * 1024 * 1024,
         sourceUrl: new URL(
@@ -76,24 +91,29 @@ function getAssets(target: RuntimeAssetTarget): RuntimeAsset[] {
     ];
   }
 
-  const catalogBaseUrl = parseCatalogBaseUrl();
+  const catalogBaseUrl = parseCatalogBaseUrl(options.catalogBaseUrl);
+  const destinationDirectory =
+    options.destinationDirectory ?? resolve(workspaceRoot, "apps/api/src/data");
   return ["weapons.json", "rules.json", "stages.json"].map((fileName) => ({
     contentType: "application/json",
-    destinationPath: resolve(workspaceRoot, "apps/api/src/data", fileName),
+    destinationPath: resolve(destinationDirectory, fileName),
     maxBytes: MAX_CATALOG_BYTES,
     sourceUrl: new URL(fileName, catalogBaseUrl),
     validate: validateJson,
   }));
 }
 
-async function prepareAsset(asset: RuntimeAsset): Promise<void> {
+async function prepareAsset(
+  asset: RuntimeAsset,
+  fetcher: AssetFetcher,
+): Promise<void> {
   const destination = file(asset.destinationPath);
   if (await destination.exists()) {
     console.info(`${destination.name} already exists; skipping download`);
     return;
   }
 
-  const response = await fetch(asset.sourceUrl);
+  const response = await fetcher(asset.sourceUrl);
   if (!response.ok) {
     throw new Error(
       `Failed to download ${asset.sourceUrl.pathname}: ${response.status} ${response.statusText}`,
@@ -122,5 +142,20 @@ async function prepareAsset(asset: RuntimeAsset): Promise<void> {
   console.info(`Downloaded ${destination.name}`);
 }
 
-const target = parseTarget(Bun.argv[2]);
-await Promise.all(getAssets(target).map(prepareAsset));
+export async function prepareAssets(
+  target: RuntimeAssetTarget,
+  options: PrepareAssetsOptions = {},
+): Promise<void> {
+  const fetcher = options.fetcher ?? fetch;
+  await Promise.all(
+    getAssets(target, options).map((asset) => prepareAsset(asset, fetcher)),
+  );
+}
+
+async function main(targetValue: string | undefined): Promise<void> {
+  await prepareAssets(parseTarget(targetValue));
+}
+
+if (import.meta.main) {
+  await main(Bun.argv[2]);
+}
