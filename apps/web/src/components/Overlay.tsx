@@ -25,7 +25,8 @@ const STAGE_REVEAL_EXIT_DURATION_MS = 1_800;
 const STAGE_REVEAL_VIDEO_START_DELAY_MS = 1_450;
 const STAGE_REVEAL_REDUCED_DURATION_MS = 150;
 const STAGE_REVEAL_EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
-const STAGE_REVEAL_VIDEO_URL = "/slected-stage.webm";
+const STAGE_REVEAL_VIDEO_URL =
+  "https://inkling-obs-streamkit.toy101-mov.org/stage-video/rainmaker-urchin_underpass.webm";
 const STAGE_REVEAL_VIGNETTE_URL = "/stage-reveal-vignette.png";
 
 type OverlayTeam = OverlayMatchup["alpha"];
