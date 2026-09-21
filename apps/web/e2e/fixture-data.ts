@@ -8,6 +8,9 @@ import type {
 
 type OverlayPlayer = OverlayMatchup["alpha"]["players"][number];
 
+const fixtureWeaponImageUrl =
+  "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+
 const tournaments: Tournament[] = [
   {
     id: "tournament-a",
@@ -86,7 +89,9 @@ function createPlayer(
     registeredName,
     iconUrl: null,
     position: null,
-    weapons: [{ id: "1", name: "Weapon One", imageUrl: null }],
+    weapons: [
+      { id: "1", name: "Weapon One", imageUrl: fixtureWeaponImageUrl },
+    ],
   };
 }
 
