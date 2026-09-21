@@ -44,6 +44,7 @@ test("表示設定は明示的な反映時だけOverlayへ通知する", async (
   page,
   api,
 }) => {
+  await page.clock.install();
   await installStoredSelection(page);
   await page.goto("/?view=debug");
 
