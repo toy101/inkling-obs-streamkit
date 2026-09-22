@@ -106,7 +106,7 @@ When an intentional design change is made, review the rendered result locally an
 bun run --filter web test:e2e -- --update-snapshots
 ```
 
-Inspect the changed PNG files under `apps/web/e2e/visual-regression.spec.ts-snapshots/` before committing them. The `web-smoke` pull request workflow uploads actual screenshots, diffs and traces from `apps/web/test-results/` together with the tracked expected baselines when a test fails. These browser checks do not claim pixel-perfect equivalence with OBS CEF; that remains a separate manual gate.
+Inspect the changed PNG files under `apps/web/e2e/visual-regression.spec.ts-snapshots/` before committing them. Baselines are intentionally managed for the `chromium-linux` project (`*-chromium-linux.png`), matching the Ubuntu Chromium environment in GitHub Actions. Baseline generation on macOS or Windows is not canonical; use the same Linux Chromium environment and do not commit platform-specific files generated on another OS. The `web-smoke` pull request workflow uploads actual screenshots, diffs and traces from `apps/web/test-results/` together with the tracked expected baselines when a test fails. These browser checks do not claim pixel-perfect equivalence with OBS CEF; that remains a separate manual gate.
 
 Pull requests run the `quality` check on a clean checkout. It uses Bun 1.4.2, installs with the frozen lockfile, prepares deterministic fixtures inside the ignored runtime paths, and runs the API type check, web lint, web build and spellcheck. The tracked TypeScript adapters and schema SQL make this check independent of `.env.local`, the local database, the CDN and the Ikaclo API.
 

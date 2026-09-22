@@ -226,7 +226,7 @@ async function expectNoOverflowingVisibleText(locator: Locator): Promise<void> {
 const screenshotOptions = {
   animations: "disabled" as const,
   caret: "hide" as const,
-  maxDiffPixelRatio: 0.01,
+  maxDiffPixels: 100,
   timeout: 15_000,
 };
 

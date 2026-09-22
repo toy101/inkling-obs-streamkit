@@ -106,7 +106,7 @@ bun run --filter web test:e2e
 bun run --filter web test:e2e -- --update-snapshots
 ```
 
-コミット前に `apps/web/e2e/visual-regression.spec.ts-snapshots/` 以下の変更されたPNGを確認する。Pull Requestの `web-smoke` workflow はテスト失敗時に `apps/web/test-results/` のactual screenshot、diff、traceと、Git管理しているexpected baselineをartifactとして保存する。このブラウザ検証はOBS CEFとの完全なピクセル一致を保証しない。OBS実機確認は別ゲートで行う。
+コミット前に `apps/web/e2e/visual-regression.spec.ts-snapshots/` 以下の変更されたPNGを確認する。baselineはGitHub ActionsのUbuntu上のChromiumと同じ `chromium-linux` project（`*-chromium-linux.png`）だけを正とする。macOSやWindowsで生成したplatform別PNGは正規baselineにせず、更新は同じLinux Chromium環境で行う。Pull Requestの `web-smoke` workflow はテスト失敗時に `apps/web/test-results/` のactual screenshot、diff、traceと、Git管理しているexpected baselineをartifactとして保存する。このブラウザ検証はOBS CEFとの完全なピクセル一致を保証しない。OBS実機確認は別ゲートで行う。
 
 Pull Request では、クリーンな checkout 上で `quality` チェックを実行する。Bun 1.4.2 と frozen lockfile を使い、Git管理外の実行時パスには決定的なfixtureを用意してから、API の型チェック、web の lint、web の build、spellcheck を順に検査する。追跡対象の TypeScript アダプターとスキーマ SQL を使うため、`.env.local`、ローカル DB、CDN、イカクロ API には依存しない。
 
