@@ -92,7 +92,21 @@ Keep Chrome's page zoom at 100% when comparing the preview against OBS, and do n
 | `bun run db:migrate` | Applies pending SQL migrations without seeding data. |
 | `bun run spellcheck` | cspell across the repository. The dictionary lives in `cspell.json`. |
 
-There are no tests yet.
+## Web end-to-end and visual regression tests
+
+The Chromium Playwright suite in `apps/web/e2e/` uses local API, image and video fixtures. It fixes the overlay viewport at 1920 × 1080, disables carousel motion, and stores the four visual baselines in Git:
+
+```bash
+bun run --filter web test:e2e
+```
+
+When an intentional design change is made, review the rendered result locally and update the baselines explicitly:
+
+```bash
+bun run --filter web test:e2e -- --update-snapshots
+```
+
+Inspect the changed PNG files under `apps/web/e2e/visual-regression.spec.ts-snapshots/` before committing them. The `web-smoke` pull request workflow uploads actual screenshots, diffs and traces from `apps/web/test-results/` together with the tracked expected baselines when a test fails. These browser checks do not claim pixel-perfect equivalence with OBS CEF; that remains a separate manual gate.
 
 Pull requests run the `quality` check on a clean checkout. It uses Bun 1.4.2, installs with the frozen lockfile, prepares deterministic fixtures inside the ignored runtime paths, and runs the API type check, web lint, web build and spellcheck. The tracked TypeScript adapters and schema SQL make this check independent of `.env.local`, the local database, the CDN and the Ikaclo API.
 
@@ -150,7 +164,7 @@ The catalogs are independent of `API_DATA_SOURCE`. SQL stores selected weapon ID
 ## Current limitations
 
 - Authentication and write endpoints are not implemented yet; development data is edited in JSON, or managed outside the API when Turso mode is selected.
-- No tests, no authentication, and no production deployment path — everything assumes `localhost`. A future static production server must reproduce the security headers configured in `apps/web/vite.config.ts`; Vite build output does not carry HTTP response headers by itself.
+- No authentication and no production deployment path — everything assumes `localhost`. A future static production server must reproduce the security headers configured in `apps/web/vite.config.ts`; Vite build output does not carry HTTP response headers by itself.
 
 ## References
 
