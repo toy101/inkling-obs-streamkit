@@ -48,14 +48,6 @@ const test = base.extend<VisualFixtures>({
 test.setTimeout(60_000);
 
 async function installVisualResourceMocks(page: Page): Promise<void> {
-  await page.route("**/stage-video/*.webm", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "video/webm",
-      body: "deterministic visual regression video fixture",
-    });
-  });
-
   await page.route("**/stage-reveal-vignette.png", async (route) => {
     await route.fulfill({
       status: 200,
@@ -71,26 +63,90 @@ async function prepareVisualPage(page: Page): Promise<void> {
   await page.addInitScript(
     ({ key, selection }) => {
       localStorage.setItem(key, selection);
-      HTMLMediaElement.prototype.play = () => Promise.resolve();
-      document.addEventListener(
-        "error",
-        (event) => {
-          if (event.target instanceof HTMLMediaElement) {
-            event.stopImmediatePropagation();
-          }
-        },
-        true,
-      );
-      const dispatchEvent = EventTarget.prototype.dispatchEvent;
-      EventTarget.prototype.dispatchEvent = function dispatchVisualEvent(
-        this: EventTarget,
-        event: Event,
-      ): boolean {
-        if (this instanceof HTMLMediaElement && event.type === "error") {
-          return true;
+
+      let videoFixture: Promise<Blob> | null = null;
+      const createVideoFixture = (): Promise<Blob> => {
+        // Encode a real WebM so the test validates media decoding instead of
+        // suppressing media errors.
+        const canvas = document.createElement("canvas");
+        canvas.width = 1920;
+        canvas.height = 1080;
+        const context = canvas.getContext("2d");
+        if (!context) {
+          return Promise.reject(new Error("Could not create video fixture canvas."));
         }
-        return dispatchEvent.call(this, event);
+
+        const gradient = context.createLinearGradient(0, 0, 1920, 1080);
+        gradient.addColorStop(0, "#111827");
+        gradient.addColorStop(0.52, "#312e81");
+        gradient.addColorStop(1, "#0f172a");
+        context.fillStyle = gradient;
+        context.fillRect(0, 0, canvas.width, canvas.height);
+
+        const requestedMimeType = "video/webm;codecs=vp8";
+        const mimeType = MediaRecorder.isTypeSupported(requestedMimeType)
+          ? requestedMimeType
+          : "video/webm";
+        const stream = canvas.captureStream(30);
+        const recorder = new MediaRecorder(stream, {
+          mimeType,
+        });
+        const chunks: Blob[] = [];
+
+        return new Promise<Blob>((resolve, reject) => {
+          recorder.addEventListener("dataavailable", (event) => {
+            if (event.data.size > 0) {
+              chunks.push(event.data);
+            }
+          });
+          recorder.addEventListener("error", () => {
+            reject(new Error("Could not encode video fixture."));
+          });
+          recorder.addEventListener("stop", () => {
+            for (const track of stream.getTracks()) {
+              track.stop();
+            }
+            resolve(new Blob(chunks, { type: mimeType }));
+          });
+
+          let recording = true;
+          const drawFrame = () => {
+            if (!recording) {
+              return;
+            }
+            context.fillRect(0, 0, 1, 1);
+            window.requestAnimationFrame(drawFrame);
+          };
+
+          recorder.start(100);
+          void drawFrame();
+          window.setTimeout(() => {
+            recording = false;
+            recorder.stop();
+          }, 5_000);
+        });
       };
+
+      const originalFetch = window.fetch.bind(window);
+      const visualFetch: typeof window.fetch = async (input, init) => {
+        const requestUrl =
+          typeof input === "string"
+            ? input
+            : input instanceof URL
+              ? input.href
+              : input.url;
+        if (!requestUrl.includes("/stage-video/")) {
+          return originalFetch(input, init);
+        }
+
+        videoFixture ??= createVideoFixture();
+        return new Response(await videoFixture, {
+          status: 200,
+          headers: { "content-type": "video/webm" },
+        });
+      };
+      visualFetch.preconnect = originalFetch.preconnect;
+      window.fetch = visualFetch;
     },
     {
       key: STORAGE_KEY,
@@ -264,7 +320,23 @@ test("Overlayのステージ紹介は安定したplayingフェーズを表示す
   await playStageButton.click();
 
   const stageReveal = overlay.locator(".overlay-stage-reveal.is-playing");
-  await expect(stageReveal).toBeVisible();
+  await expect(stageReveal).toBeVisible({ timeout: 15_000 });
+  const videoFixture = await stageReveal.locator("video").evaluate((element) => {
+    const video = element as HTMLVideoElement;
+    return {
+      duration: video.duration,
+      hasError: video.error !== null,
+      readyState: video.readyState,
+    };
+  });
+  expect(videoFixture.duration).toBeGreaterThan(0);
+  expect(videoFixture.hasError).toBe(false);
+  expect(videoFixture.readyState).toBeGreaterThanOrEqual(2);
+  await stageReveal.locator("video").evaluate((element) => {
+    const video = element as HTMLVideoElement;
+    video.pause();
+    video.currentTime = 0;
+  });
   await expect(
     overlay.getByText(visualFixtureData.matchup.stage.name).first(),
   ).toBeVisible();
