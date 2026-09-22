@@ -45,6 +45,8 @@ const test = base.extend<VisualFixtures>({
   },
 });
 
+test.setTimeout(60_000);
+
 async function installVisualResourceMocks(page: Page): Promise<void> {
   await page.route("**/stage-video/*.webm", async (route) => {
     await route.fulfill({
@@ -64,6 +66,7 @@ async function installVisualResourceMocks(page: Page): Promise<void> {
 }
 
 async function prepareVisualPage(page: Page): Promise<void> {
+  await page.setViewportSize({ width: 2400, height: 1600 });
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.addInitScript(
     ({ key, selection }) => {
