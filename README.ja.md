@@ -92,7 +92,21 @@ API は既定で `apps/api/src/data/` 以下のプレイヤー・大会 JSON を
 | `bun run db:migrate` | 開発データを投入せず、未適用の SQL マイグレーションだけを実行する。 |
 | `bun run spellcheck` | リポジトリ全体を cspell で検査する。辞書は `cspell.json`。 |
 
-テストはまだない。
+## Web E2E・ビジュアル回帰テスト
+
+`apps/web/e2e/` の Chromium Playwright suite は、API・画像・動画をローカルfixtureで固定する。Overlayのviewportは1920 × 1080に固定し、カルーセルの動きを止めたうえで、4つのvisual baselineをGitで管理する。
+
+```bash
+bun run --filter web test:e2e
+```
+
+意図したデザイン変更でbaselineを更新するときは、ローカルの描画結果を確認してから明示的に更新する。
+
+```bash
+bun run --filter web test:e2e -- --update-snapshots
+```
+
+コミット前に `apps/web/e2e/visual-regression.spec.ts-snapshots/` 以下の変更されたPNGを確認する。baselineはGitHub ActionsのUbuntu上のChromiumと同じ `chromium-linux` project（`*-chromium-linux.png`）だけを正とする。macOSやWindowsで生成したplatform別PNGは正規baselineにせず、更新は同じLinux Chromium環境で行う。Pull Requestの `web-smoke` workflow はテスト失敗時に `apps/web/test-results/` のactual screenshot、diff、traceと、Git管理しているexpected baselineをartifactとして保存する。このブラウザ検証はOBS CEFとの完全なピクセル一致を保証しない。OBS実機確認は別ゲートで行う。
 
 Pull Request では、クリーンな checkout 上で `quality` チェックを実行する。Bun 1.4.2 と frozen lockfile を使い、Git管理外の実行時パスには決定的なfixtureを用意してから、API の型チェック、web の lint、web の build、spellcheck を順に検査する。追跡対象の TypeScript アダプターとスキーマ SQL を使うため、`.env.local`、ローカル DB、CDN、イカクロ API には依存しない。
 
@@ -150,7 +164,7 @@ SQL マイグレーションは `apps/api/src/db/migrations/` に置く。`bun r
 ## 現時点の制約
 
 - 認証と更新用エンドポイントは未実装。開発データは JSON を編集するか、Turso モードでは API 外から管理する。
-- テスト・認証・本番デプロイ経路はなく、すべて `localhost` 前提。将来静的ファイルを本番配信する場合は、`apps/web/vite.config.ts` のセキュリティヘッダーを配信サーバー側でも設定する必要がある。Vite のビルド成果物だけでは HTTP レスポンスヘッダーは引き継がれない。
+- 認証と本番デプロイ経路はなく、すべて `localhost` 前提。将来静的ファイルを本番配信する場合は、`apps/web/vite.config.ts` のセキュリティヘッダーを配信サーバー側でも設定する必要がある。Vite のビルド成果物だけでは HTTP レスポンスヘッダーは引き継がれない。
 
 ## 参考
 

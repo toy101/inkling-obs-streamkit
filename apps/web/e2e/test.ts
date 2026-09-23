@@ -3,6 +3,8 @@ import type { ConsoleMessage, Page, Route } from "@playwright/test";
 
 import { fixtureData } from "./fixture-data";
 
+export type FixtureData = typeof fixtureData;
+
 const API_ORIGIN = "http://127.0.0.1:3000";
 
 export type ApiEndpoint =
@@ -41,6 +43,10 @@ export type ApiMock = {
 
 export type InstalledApiMock = ApiMock & {
   readonly assertNoBrowserErrors: () => void;
+};
+
+export type InstallApiMockOptions = {
+  readonly fixtures?: FixtureData;
 };
 
 function errorMessage(error: unknown): string {
@@ -109,7 +115,11 @@ function isAllowedConsoleError(
   );
 }
 
-export async function installApiMock(page: Page): Promise<InstalledApiMock> {
+export async function installApiMock(
+  page: Page,
+  options: InstallApiMockOptions = {},
+): Promise<InstalledApiMock> {
+  const fixtures = options.fixtures ?? fixtureData;
   const requests: ApiRequestRecord[] = [];
   const matchupRequests: OverlayMatchupRequest[] = [];
   const browserErrors: string[] = [];
@@ -159,12 +169,12 @@ export async function installApiMock(page: Page): Promise<InstalledApiMock> {
 
     switch (endpoint) {
       case "/tournaments":
-        await fulfillJson(route, fixtureData.tournaments);
+        await fulfillJson(route, fixtures.tournaments);
         return;
       case "/tournaments/:id/teams": {
         const tournamentId = url.pathname.split("/")[2];
         const teams = tournamentId
-          ? fixtureData.tournamentTeams[tournamentId]
+          ? fixtures.tournamentTeams[tournamentId]
           : undefined;
         if (!teams) {
           throw new Error(
@@ -175,10 +185,10 @@ export async function installApiMock(page: Page): Promise<InstalledApiMock> {
         return;
       }
       case "/rules":
-        await fulfillJson(route, fixtureData.rules);
+        await fulfillJson(route, fixtures.rules);
         return;
       case "/stages":
-        await fulfillJson(route, fixtureData.stages);
+        await fulfillJson(route, fixtures.stages);
         return;
       case "/overlay/matchup": {
         const overlayRequest: OverlayMatchupRequest = {
@@ -187,7 +197,7 @@ export async function installApiMock(page: Page): Promise<InstalledApiMock> {
           query: matchupQuery(url),
         };
         matchupRequests.push(overlayRequest);
-        await fulfillJson(route, fixtureData.matchup);
+        await fulfillJson(route, fixtures.matchup);
         return;
       }
     }

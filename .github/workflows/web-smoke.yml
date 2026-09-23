@@ -37,6 +37,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: web-smoke-artifacts
-          path: apps/web/test-results/
+          path: |
+            apps/web/test-results/
+            apps/web/e2e/visual-regression.spec.ts-snapshots/
           if-no-files-found: ignore
           retention-days: 7
