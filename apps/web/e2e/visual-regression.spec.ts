@@ -58,7 +58,8 @@ async function installVisualResourceMocks(page: Page): Promise<void> {
 }
 
 async function prepareVisualPage(page: Page): Promise<void> {
-  await page.setViewportSize({ width: 2400, height: 1600 });
+  // Keep the centered 1920×1080 stage on integer CSS coordinates in Debug.
+  await page.setViewportSize({ width: 2400, height: 1599 });
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.addInitScript(
     ({ key, selection }) => {
@@ -160,6 +161,15 @@ async function prepareVisualPage(page: Page): Promise<void> {
 async function getReadyOverlay(page: Page, api: InstalledApiMock): Promise<FrameLocator> {
   const overlayFrame = page.frameLocator(`iframe[title="${OVERLAY_TITLE}"]`);
   await expect(overlayFrame.locator("main.overlay")).toBeVisible();
+  const overlayFrameElement = page.locator(`iframe[title="${OVERLAY_TITLE}"]`);
+  const frameBox = await overlayFrameElement.boundingBox();
+  if (!frameBox) {
+    throw new Error("Overlay iframe bounding box was not available.");
+  }
+  expect(frameBox.x).toBe(Math.round(frameBox.x));
+  expect(frameBox.y).toBe(Math.round(frameBox.y));
+  expect(frameBox.width).toBe(1920);
+  expect(frameBox.height).toBe(1080);
   await expect.poll(() => api.matchupRequests().length).toBe(1);
 
   const autoplayButton = page.getByRole("button", {
