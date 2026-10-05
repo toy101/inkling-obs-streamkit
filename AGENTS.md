@@ -40,7 +40,7 @@ bun run spellcheck               # cspell。設定と辞書は cspell.json
 
 ### 1 アプリ 3 ビュー
 
-`apps/web/src/App.tsx` が `?view=` クエリパラメータで Dock / Overlay / Debug を分岐する。ルーターは使わず、別アプリ・別バンドルにも分けない（同一 origin で localStorage を共有することが前提のため）。
+`apps/web/src/App.tsx` が `?view=` クエリパラメータで Dock / Overlay / Debug を分岐する。ルーターは使わず、別アプリ・別バンドルにも分けない（同一 origin で BroadcastChannel と localStorage を共有することが前提のため）。
 
 `main.tsx` は同じ値を `document.documentElement.dataset.view` にも複製する。CSS 側は `html[data-view="overlay"]` で分岐できる（`index.css`）。ビューを追加するときは App.tsx の switch と dataset 依存 CSS の両方を確認する。
 
@@ -53,10 +53,11 @@ bun run spellcheck               # cspell。設定と辞書は cspell.json
 
 ### Dock → Overlay の状態同期
 
-同期経路は `apps/web/src/lib/overlay-state.ts` のみ。localStorage key は `inkling:overlay-selection`。
+同期経路は `apps/web/src/lib/overlay-state.ts` のみ。変更の通知は BroadcastChannel `inkling:overlay`、最新の選択の保存は localStorage key `inkling:overlay-selection`。
 
-- **渡すのは選択IDと表示設定だけ。API レスポンスを localStorage に保存しない。** 現在のpayloadは大会、アルファ／ブラボーチーム、ルール、ステージの各IDとアクセントカラー。Overlay は受け取った ID で API を再取得する（backend がデータの正本）。表示対象が増えても「ID と表示モードを渡し、Overlay が取得する」構造を保つ。
-- `storage` イベントは変更した window 自身では発火しない。そのためモジュールレベルの listener Set を併用している。OBS では Dock と Overlay が別 window なので `storage` イベントが効き、Debug では両方が同一 window なので listener が効く。**どちらか一方だけにすると Debug か OBS のどちらかが壊れる。**
+- **渡すのは選択IDと表示設定だけ。API レスポンスを BroadcastChannel で送ったり localStorage に保存したりしない。** 現在のpayloadは大会、アルファ／ブラボーチーム、ルール、ステージの各IDとアクセントカラー。Overlay は受け取った ID で API を再取得する（backend がデータの正本）。表示対象が増えても「ID と表示モードを渡し、Overlay が取得する」構造を保つ。
+- 通知は BroadcastChannel だけで行い、`storage` イベントは使わない。localStorage は Dock と Overlay が再読み込みや OBS の再起動の後に選択を復元するためだけに使う。ステージ紹介のような一度きりのイベントは localStorage に保存しない（起動時に読み込むと、再起動のたびに古い演出が再生されてしまう）。
+- OBS では Dock と Overlay が別ページ、Debug でも Overlay は iframe の別ページなので、どちらも同じ BroadcastChannel 経路で届く。BroadcastChannel は送信元のインスタンスには届かないため、購読ごとに別インスタンスを作り、送信用のインスタンスを購読に使い回さない。
 
 ### Overlay のサイズ規約
 
