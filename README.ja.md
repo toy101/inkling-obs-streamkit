@@ -7,7 +7,7 @@ Splatoon 大会配信用の自作 OBS ツールキット。OBS の **カスタ�
 流れは次のとおり。
 
 1. 配信者が Dock で大会・左右のチーム・次のルール／ステージ・アクセントカラー1色を選ぶ。
-2. **Overlayへ反映**を押すと、選択IDと表示用カラーだけを`localStorage`へ書く。
+2. **Overlayへ反映**を押すと、選択IDと表示用カラーだけを`BroadcastChannel`で Overlay へ送る。再読み込み後も復元できるよう、同じ値を`localStorage`にも保存する。
 3. Overlay が変更を検知し、API から最新の対戦データを取得して4画面のループを描画する。
 
 Dock・Overlay・Debug が同じアプリに同居しているため、OBS を起動しなくてもブラウザだけでオーバーレイを作り込める。
@@ -62,8 +62,8 @@ API は既定で `apps/api/src/data/` 以下のプレイヤー・大会 JSON を
 - ツールバーから、対戦カード・各チーム詳細・次戦ルール／ステージを iframe プレビューへ即時表示できる。この操作は Debug 専用で、OBS の Browser Source 表示は変えない。
 - ツールバーに描画サイズ・比率・現在の倍率・縮小後の表示サイズを表示する。
 - オーバーレイの背後の市松模様は透過確認用で、配信には含まれない。
-- Dock と iframe の選択同期には、同一 origin の `localStorage` と `storage` イベントを使う。
-- iframe は固定の `?view=overlay` だけを読み込み、上記のストレージ経路を必要とするため、意図的に同一 origin にしている。Debug 用メッセージも親 window・origin・payload を検証してから使う。同一 origin は信頼境界であり、sandbox による隔離ではない。
+- Dock と iframe の選択同期には、OBS の Dock とブラウザソースの間と同じく、同一 origin の `BroadcastChannel` を使う。`localStorage` はページ読み込み時に最新の選択を復元するためだけに使う。
+- iframe は固定の `?view=overlay` だけを読み込み、上記の同一 origin の同期経路を必要とするため、意図的に同一 origin にしている。Debug 用メッセージも親 window・origin・payload を検証してから使う。同一 origin は信頼境界であり、sandbox による隔離ではない。
 - Vite の開発・プレビューサーバーは Debug からの同一 origin 埋め込みだけを許可し、他 origin からの埋め込みを拒否する。API は `127.0.0.1` だけで待ち受け、CORS は `apps/api/src/app.ts` に列挙したローカル Web origin だけを許可する。
 
 ## ディレクトリ構成
@@ -120,7 +120,7 @@ Elysiaのルートスキーマから`@elysia/openapi`でOpenAPI文書を生成�
 
 **型は API から web へ流れる。** `apps/api/src/index.ts` が `type App = typeof app` を export し、`apps/web/src/lib/api.ts` がそこから Eden Treaty クライアントを組み立てる。web はワークスペースを越えて API のソースの型を import しているので、ルートを変えるとフロント側の型が即座に変わる。リクエストは直接の `fetch` ではなく、`api.overlay.matchup.get()` などの型付き呼び出しを通す。
 
-**Dock が渡すのは選択IDと表示設定だけ。** API のレスポンスを `localStorage` に保存せず、Overlay が API から取り直すことで、backend をデータの正本に保つ。`apps/web/src/lib/overlay-state.ts` は `storage` イベント（OBS では Dock と Overlay が別 window）とモジュールレベルの listener（Debug では両方が同一 window）を併用する。どちらも欠かせない。
+**Dock が渡すのは選択IDと表示設定だけ。** API のレスポンスを BroadcastChannel で送ったり `localStorage` に保存したりせず、Overlay が API から取り直すことで、backend をデータの正本に保つ。`apps/web/src/lib/overlay-state.ts` は変更を `BroadcastChannel` で送り、`localStorage` には最新の選択だけを保存する。保存するのは、Dock と Overlay が再読み込みや OBS の再起動の後に選択を復元するためである。ステージ紹介のような一度きりのイベントは保存しないので、再起動しても再生されない。OBS でも Debug（Overlay は iframe）でも Dock と Overlay は別ページなので、どちらも同じ経路で届く。
 
 **描画サイズは定数。** `apps/web/src/lib/overlay-canvas.ts` が 1920 × 1080 を持ち、Overlay と Debug のプレビューがそこを参照する。
 

@@ -439,6 +439,7 @@ function OverlayCarousel({
       className={`overlay-carousel${
         autoplay && !suspended && animateActiveSlide ? "" : " is-paused"
       }`}
+      data-autoplay={autoplay}
     >
       {slides.map((slide, index) => (
         <div

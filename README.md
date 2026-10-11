@@ -7,7 +7,7 @@ A self-built OBS toolkit for Splatoon tournament streams. It pairs an OBS **Cust
 The flow is:
 
 1. The operator picks a tournament, two teams, the next rule/stage, and one accent color in the Dock.
-2. Pressing **Overlayへ反映** writes only those selection IDs and the presentation color to `localStorage`.
+2. Pressing **Overlayへ反映** sends only those selection IDs and the presentation color to the Overlay through a `BroadcastChannel`, and saves the same values to `localStorage` so they survive a reload.
 3. The Overlay picks up the change, fetches the current matchup from the API, and renders its four-slide loop.
 
 Because the Dock, the Overlay and a Debug view all live in the same app, the overlay can be built and checked in a browser without launching OBS.
@@ -62,8 +62,8 @@ Keep Chrome's page zoom at 100% when comparing the preview against OBS, and do n
 - The toolbar can immediately switch the iframe preview to the matchup, either team detail, or next-match rule/stage slide. This is Debug-only and does not alter the OBS Browser Source.
 - The toolbar reports canvas size, aspect ratio, current scale and the scaled display size.
 - The checkerboard behind the overlay exists to verify transparency; it is not part of the stream.
-- The Dock and the iframe stay in sync through same-origin `localStorage` and `storage` events.
-- The iframe is intentionally same-origin because it loads only the fixed `?view=overlay` page and needs that storage channel. Debug messages also verify the parent window, origin and payload before use. Same-origin is a trust boundary, not sandbox isolation.
+- The Dock and the iframe stay in sync through a same-origin `BroadcastChannel`, the same path the Dock and the Browser Source use in OBS. `localStorage` only restores the latest selection when a page loads.
+- The iframe is intentionally same-origin because it loads only the fixed `?view=overlay` page and needs that same-origin sync path. Debug messages also verify the parent window, origin and payload before use. Same-origin is a trust boundary, not sandbox isolation.
 - Vite's development and preview servers allow same-origin framing for Debug but reject framing by other origins. The API listens only on `127.0.0.1`, and CORS allows only the local web origins listed in `apps/api/src/app.ts`.
 
 ## Project structure
@@ -120,7 +120,7 @@ GitHub Pages must use **GitHub Actions** as its publishing source in the reposit
 
 **Types flow from the API into the web app.** `apps/api/src/index.ts` exports `type App = typeof app`, and `apps/web/src/lib/api.ts` builds an Eden Treaty client from it. The web app imports the API's source types across the workspace, so changing a route immediately changes the types on the front end. Requests go through typed calls such as `api.overlay.matchup.get()` rather than direct `fetch` calls.
 
-**The Dock only hands over selection IDs and presentation settings.** API responses are never stored in `localStorage`; the Overlay fetches the data again from the API, which keeps the backend the single source of truth. `apps/web/src/lib/overlay-state.ts` combines `storage` events (in OBS the Dock and the Overlay are separate windows) with module-level listeners (in the Debug view both live in one window). Both paths are required.
+**The Dock only hands over selection IDs and presentation settings.** API responses are never sent over the channel or stored in `localStorage`; the Overlay fetches the data again from the API, which keeps the backend the single source of truth. `apps/web/src/lib/overlay-state.ts` sends changes over a `BroadcastChannel` and keeps only the latest selection in `localStorage`, so the Dock and the Overlay can restore it after a reload or an OBS restart. One-off events such as the stage reveal are never stored, so a restart does not replay them. The Dock and the Overlay are separate pages both in OBS and in the Debug view, where the Overlay is an iframe, so both setups use the same path.
 
 **The canvas size is a constant.** `apps/web/src/lib/overlay-canvas.ts` holds 1920 × 1080, and both the Overlay and the Debug preview read it from there.
 

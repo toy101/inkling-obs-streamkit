@@ -294,7 +294,7 @@ test("旧チームIDキーを含む保存状態を復元する", async ({ page }
   await expect(dock.getByLabel("対戦名")).toHaveValue("旧形式");
 });
 
-test("別ページのOverlayはstorageイベントで対戦を更新する", async ({
+test("別ページのOverlayも反映した対戦へ更新する", async ({
   page,
   api,
 }) => {

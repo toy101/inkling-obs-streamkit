@@ -1,5 +1,5 @@
 const STORAGE_KEY = "inkling:overlay-selection";
-const STAGE_REVEAL_STORAGE_KEY = "inkling:stage-reveal-request";
+const CHANNEL_NAME = "inkling:overlay";
 
 export const DEFAULT_ACCENT_COLOR = "#8b5cf6";
 export const MATCH_LABEL_MAX_LENGTH = 40;
@@ -26,11 +26,14 @@ export type StageRevealRequest = {
   stageId: string;
 };
 
+type OverlayMessage =
+  | { type: "selection"; selection: OverlaySelection }
+  | { type: "stage-reveal"; request: StageRevealRequest };
+
 type Listener = (selection: OverlaySelection | null) => void;
 type StageRevealListener = (request: StageRevealRequest) => void;
 
-const listeners = new Set<Listener>();
-const stageRevealListeners = new Set<StageRevealListener>();
+const senderChannel = new BroadcastChannel(CHANNEL_NAME);
 
 function normalizeAccentColor(value: unknown): string {
   return isAccentColor(value) ? value.toLowerCase() : DEFAULT_ACCENT_COLOR;
@@ -51,68 +54,103 @@ function getString(record: Record<string, unknown>, key: string): string | null 
   return typeof value === "string" ? value : null;
 }
 
-function parseOverlaySelection(value: string | null): OverlaySelection | null {
-  if (!value) {
+function parseOverlaySelection(value: unknown): OverlaySelection | null {
+  if (!isRecord(value)) {
     return null;
   }
 
-  try {
-    const parsed: unknown = JSON.parse(value);
-    if (isRecord(parsed)) {
-      const tournamentId = getString(parsed, "tournamentId");
-      const alphaTournamentTeamId =
-        getString(parsed, "alphaTournamentTeamId") ??
-        getString(parsed, "leftTournamentTeamId");
-      const bravoTournamentTeamId =
-        getString(parsed, "bravoTournamentTeamId") ??
-        getString(parsed, "rightTournamentTeamId");
+  const tournamentId = getString(value, "tournamentId");
+  const alphaTournamentTeamId =
+    getString(value, "alphaTournamentTeamId") ??
+    getString(value, "leftTournamentTeamId");
+  const bravoTournamentTeamId =
+    getString(value, "bravoTournamentTeamId") ??
+    getString(value, "rightTournamentTeamId");
 
-      if (!tournamentId || !alphaTournamentTeamId || !bravoTournamentTeamId) {
-        return null;
-      }
-
-      return {
-        tournamentId,
-        alphaTournamentTeamId,
-        bravoTournamentTeamId,
-        ruleId: getString(parsed, "ruleId") ?? "",
-        stageId: getString(parsed, "stageId") ?? "",
-        accentColor: normalizeAccentColor(parsed["accentColor"]),
-        matchLabel: normalizeMatchLabel(parsed["matchLabel"]),
-      };
-    }
-  } catch {
+  if (!tournamentId || !alphaTournamentTeamId || !bravoTournamentTeamId) {
     return null;
   }
 
-  return null;
+  return {
+    tournamentId,
+    alphaTournamentTeamId,
+    bravoTournamentTeamId,
+    ruleId: getString(value, "ruleId") ?? "",
+    stageId: getString(value, "stageId") ?? "",
+    accentColor: normalizeAccentColor(value["accentColor"]),
+    matchLabel: normalizeMatchLabel(value["matchLabel"]),
+  };
 }
 
-function parseStageRevealRequest(value: string | null): StageRevealRequest | null {
+function parseStoredOverlaySelection(
+  value: string | null,
+): OverlaySelection | null {
   if (!value) {
     return null;
   }
 
   try {
-    const parsed: unknown = JSON.parse(value);
-    if (!isRecord(parsed)) {
-      return null;
-    }
-
-    const requestId = getString(parsed, "requestId");
-    const ruleId = getString(parsed, "ruleId");
-    const stageId = getString(parsed, "stageId");
-
-    return requestId && ruleId && stageId
-      ? { requestId, ruleId, stageId }
-      : null;
+    return parseOverlaySelection(JSON.parse(value));
   } catch {
     return null;
   }
+}
+
+function parseStageRevealRequest(value: unknown): StageRevealRequest | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const requestId = getString(value, "requestId");
+  const ruleId = getString(value, "ruleId");
+  const stageId = getString(value, "stageId");
+
+  return requestId && ruleId && stageId
+    ? { requestId, ruleId, stageId }
+    : null;
+}
+
+function parseOverlayMessage(value: unknown): OverlayMessage | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  switch (value["type"]) {
+    case "selection": {
+      const selection = parseOverlaySelection(value["selection"]);
+      return selection ? { type: "selection", selection } : null;
+    }
+    case "stage-reveal": {
+      const request = parseStageRevealRequest(value["request"]);
+      return request ? { type: "stage-reveal", request } : null;
+    }
+    default:
+      return null;
+  }
+}
+
+function postOverlayMessage(message: OverlayMessage): void {
+  senderChannel.postMessage(message);
+}
+
+function subscribeOverlayMessages(
+  handler: (message: OverlayMessage) => void,
+): () => void {
+  // 送信用のインスタンスは使い回さない。送信元には自分のメッセージが届かないため。
+  const channel = new BroadcastChannel(CHANNEL_NAME);
+
+  channel.addEventListener("message", (event: MessageEvent<unknown>) => {
+    const message = parseOverlayMessage(event.data);
+    if (message) {
+      handler(message);
+    }
+  });
+
+  return () => channel.close();
 }
 
 export function getOverlaySelection(): OverlaySelection | null {
-  return parseOverlaySelection(localStorage.getItem(STORAGE_KEY));
+  return parseStoredOverlaySelection(localStorage.getItem(STORAGE_KEY));
 }
 
 export function setOverlaySelection(selection: OverlaySelection): void {
@@ -123,68 +161,35 @@ export function setOverlaySelection(selection: OverlaySelection): void {
   };
 
   localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizedSelection));
-
-  // Debug画面など、同一window内のOverlayにも通知する。
-  for (const listener of listeners) {
-    listener(normalizedSelection);
-  }
+  postOverlayMessage({ type: "selection", selection: normalizedSelection });
 }
 
 export function subscribeOverlaySelection(listener: Listener): () => void {
-  listeners.add(listener);
-
-  const handleStorage = (event: StorageEvent) => {
-    if (event.key !== STORAGE_KEY) {
-      return;
+  const unsubscribe = subscribeOverlayMessages((message) => {
+    if (message.type === "selection") {
+      listener(message.selection);
     }
+  });
 
-    listener(parseOverlaySelection(event.newValue));
-  };
+  // 呼び出し側の初期値だけに頼らない。初期値の読み込みから購読開始までの変更を取りこぼすため。
+  listener(getOverlaySelection());
 
-  window.addEventListener("storage", handleStorage);
-
-  return () => {
-    listeners.delete(listener);
-    window.removeEventListener("storage", handleStorage);
-  };
+  return unsubscribe;
 }
 
 export function requestStageReveal(
   request: Pick<StageRevealRequest, "ruleId" | "stageId">,
 ): void {
-  const stageRevealRequest: StageRevealRequest = {
-    ...request,
-    requestId: crypto.randomUUID(),
-  };
-
-  localStorage.setItem(
-    STAGE_REVEAL_STORAGE_KEY,
-    JSON.stringify(stageRevealRequest),
-  );
-
-  for (const listener of stageRevealListeners) {
-    listener(stageRevealRequest);
-  }
+  postOverlayMessage({
+    type: "stage-reveal",
+    request: { ...request, requestId: crypto.randomUUID() },
+  });
 }
 
 export function subscribeStageReveal(listener: StageRevealListener): () => void {
-  stageRevealListeners.add(listener);
-
-  const handleStorage = (event: StorageEvent) => {
-    if (event.key !== STAGE_REVEAL_STORAGE_KEY) {
-      return;
+  return subscribeOverlayMessages((message) => {
+    if (message.type === "stage-reveal") {
+      listener(message.request);
     }
-
-    const request = parseStageRevealRequest(event.newValue);
-    if (request) {
-      listener(request);
-    }
-  };
-
-  window.addEventListener("storage", handleStorage);
-
-  return () => {
-    stageRevealListeners.delete(listener);
-    window.removeEventListener("storage", handleStorage);
-  };
+  });
 }

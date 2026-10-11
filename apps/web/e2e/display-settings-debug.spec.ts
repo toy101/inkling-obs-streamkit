@@ -141,6 +141,7 @@ test("Debugのスライド操作とBRAVO画像の遅延読み込みを検証す�
   const activeSlide = overlay.locator(".overlay-slide.is-active");
   const alphaDetail = overlay.locator(".overlay-team-detail--left");
   const bravoDetail = overlay.locator(".overlay-team-detail--right");
+  const carousel = overlay.locator(".overlay-carousel");
 
   await expect(overlayRoot).toBeVisible();
   await expect.poll(() => api.matchupRequests().length).toBe(1);
@@ -173,6 +174,7 @@ test("Debugのスライド操作とBRAVO画像の遅延読み込みを検証す�
   await expect(autoplayButton).toHaveAttribute("aria-pressed", "true");
   await autoplayButton.click();
   await expect(autoplayButton).toHaveAttribute("aria-pressed", "false");
+  await expect(carousel).toHaveAttribute("data-autoplay", "false");
 
   await page.clock.fastForward(16_000);
   await expect(
@@ -182,6 +184,7 @@ test("Debugのスライド操作とBRAVO画像の遅延読み込みを検証す�
 
   await autoplayButton.click();
   await expect(autoplayButton).toHaveAttribute("aria-pressed", "true");
+  await expect(carousel).toHaveAttribute("data-autoplay", "true");
   await page.clock.fastForward(8_000);
   await expect(activeSlide.locator(".overlay-matchup")).toBeVisible();
   expect(api.requestCount("/overlay/matchup")).toBe(1);
