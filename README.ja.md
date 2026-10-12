@@ -31,14 +31,14 @@ bun dev
 
 API は既定で `apps/api/src/data/` 以下のプレイヤー・大会 JSON を直接読むため、データモデルを調整している間は DB セットアップ不要。アプリ起動前の準備スクリプトは、不足している実行時アセットだけをダウンロードする。ブキ・ルール・ステージの各カタログは `apps/api/src/data/`、ステージ紹介のビネット画像は `apps/web/public/` へ配置し、既存ファイルがあればCDNへ再リクエストしない。ローカルのソースファイルを変更すると、BunのwatchモードがAPIを再読み込みする。
 
-開発時のデータソースは、リポジトリのルートから次のコマンドで選べる。`pnpm run` はスクリプトの呼び出しにだけ使い、依存関係のインストールと実際のアプリ起動は引き続き Bun を使う。pnpm が未導入なら `bun run dev:json` または `bun run dev:d1` で同じスクリプトを起動できる。
+開発時のデータソースは、リポジトリのルートから Bun のコマンドで選べる。
 
 ```bash
-pnpm run dev:json  # Web :5173 + Bun API :3000。現在の JSON を直接参照
-pnpm run dev:d1    # Web :5173 + API Worker :8787。ローカル D1 を参照
+bun run dev:json  # Web :5173 + Bun API :3000。現在の JSON を直接参照
+bun run dev:d1    # Web :5173 + API Worker :8787。ローカル D1 を参照
 ```
 
-`dev:d1` は [Wrangler のローカル D1](https://developers.cloudflare.com/d1/best-practices/local-development/)を使う。起動前に `apps/api/src/db/migrations/` の未適用分を実行し、初回だけ現在の `players.json`・`tournaments.json` を開発データとして投入する。D1 の状態は `apps/api/.data/wrangler/` に保存し、再起動や JSON ファイルの編集では上書きしない。ローカル D1 を意図的に作り直す場合は、API と Web を停止してからこのディレクトリを削除する。マイグレーションと初期投入だけを行う場合は `pnpm run db:setup:local` を使う。ローカル D1 はリモート D1 と分離され、これらのコマンドは `--local` を明示している。API Worker は起動時に `CATALOG_URL` の HTTPS カタログへアクセスするため、CDN への接続は必要。
+`dev:d1` は [Wrangler のローカル D1](https://developers.cloudflare.com/d1/best-practices/local-development/)を使う。起動前に `apps/api/src/db/migrations/` の未適用分を実行し、初回だけ現在の `players.json`・`tournaments.json` を開発データとして投入する。D1 の状態は `apps/api/.data/wrangler/` に保存し、再起動や JSON ファイルの編集では上書きしない。ローカル D1 を意図的に作り直す場合は、API と Web を停止してからこのディレクトリを削除する。マイグレーションと初期投入だけを行う場合は `bun run db:setup:local` を使う。ローカル D1 はリモート D1 と分離され、これらのコマンドは `--local` を明示している。API Worker は起動時に `CATALOG_URL` の HTTPS カタログへアクセスするため、CDN への接続は必要。
 
 <http://localhost:5173/?view=debug> を開き、左のパネルで対戦情報を選んで **Overlayへ反映** を押すと、右のオーバーレイプレビューが更新される。
 
@@ -95,9 +95,9 @@ pnpm run dev:d1    # Web :5173 + API Worker :8787。ローカル D1 を参照
 | `bun run --filter web dev` | 片方のワークスペースだけ起動する（`api` も同様）。 |
 | `bun run --filter web lint` | ESLint。lint 設定があるのは web のみ。 |
 | `bun run --filter web build` | `tsc -b && vite build`。唯一の型チェック経路。 |
-| `pnpm run dev:json` | JSON 参照の Bun API と Web を起動する。 |
-| `pnpm run dev:d1` | ローカル D1 を準備し、API Worker と Web を起動する。 |
-| `pnpm run db:setup:local` | ローカル D1 に未適用のマイグレーションと初回データを投入する。 |
+| `bun run dev:json` | JSON 参照の Bun API と Web を起動する。 |
+| `bun run dev:d1` | ローカル D1 を準備し、API Worker と Web を起動する。 |
+| `bun run db:setup:local` | ローカル D1 に未適用のマイグレーションと初回データを投入する。 |
 | `bun run openapi:build` | APIを起動せず、実行時データも読み込まずに、`dist/openapi/` 以下へ静的な Scalar ビューアーと `openapi.yaml` を生成する。 |
 | `bun run db:migrate` | 設定した D1 に未適用の SQL マイグレーションを実行する。 |
 | `D1_SEED_DEVELOPMENT_DATA=1 bun run db:setup` | マイグレーションを実行し、JSON の開発データを一度だけ投入する。 |

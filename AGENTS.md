@@ -8,15 +8,13 @@ Splatoon 大会配信用の自作 OBS ツールキット。OBS の **Custom Brow
 
 ## コマンド
 
-依存関係の管理とアプリのランタイムは Bun。ロックファイルはルートの `bun.lock` 1 つ。`pnpm run` は、pnpm を導入している環境でルートスクリプトを呼び出す場合だけ使える。pnpm がなければ同じスクリプトを `bun run` で呼び出す。
+依存関係の管理、アプリのランタイム、スクリプトの起動には Bun を使う。ロックファイルはルートの `bun.lock` 1 つ。
 
 ```bash
 bun install                      # ルートで実行
 bun dev                          # JSON参照で web(:5173)、Bun API(:3000) を起動
 bun run dev:json                 # JSON参照で web(:5173)、Bun API(:3000) を起動
 bun run dev:d1                   # ローカル D1 を準備し web(:5173)、API Worker(:8787) を起動
-pnpm run dev:json                # pnpm がある場合の同等コマンド
-pnpm run dev:d1                  # pnpm がある場合の同等コマンド
 bun run --filter web dev         # 片方だけ起動したいとき
 bun run --filter api dev
 bun run db:setup:local           # ローカル D1 のマイグレーションと初回データ投入

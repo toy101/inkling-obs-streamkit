@@ -31,14 +31,14 @@ Run these commands at the repository root. The two `.env.local` files are ignore
 
 The API reads player and tournament JSON under `apps/api/src/data/` by default, so database setup is unnecessary while the data model is being adjusted. Before the apps start, a preparation script downloads any missing runtime assets: the weapon, rule and stage catalogs go under `apps/api/src/data/`, while the stage-reveal vignette goes under `apps/web/public/`. Existing files are kept without another CDN request. Bun's watch mode reloads the API after local source files change.
 
-Choose the development data source from the repository root. `pnpm run` only invokes these scripts; dependency installation and the application runtime still use Bun. If pnpm is not installed, use `bun run dev:json` or `bun run dev:d1` instead.
+Choose the development data source from the repository root with Bun:
 
 ```bash
-pnpm run dev:json  # Web :5173 + Bun API :3000, reading the current JSON files
-pnpm run dev:d1    # Web :5173 + API Worker :8787, reading local D1
+bun run dev:json  # Web :5173 + Bun API :3000, reading the current JSON files
+bun run dev:d1    # Web :5173 + API Worker :8787, reading local D1
 ```
 
-`dev:d1` uses [Wrangler's local D1](https://developers.cloudflare.com/d1/best-practices/local-development/). Before starting, it applies pending migrations from `apps/api/src/db/migrations/` and inserts the current `players.json` and `tournaments.json` development data once. D1 state is persisted under `apps/api/.data/wrangler/`; restarts and later JSON edits do not overwrite it. To intentionally recreate the local database, stop both apps and remove that directory. Run `pnpm run db:setup:local` to perform only the migration and initial import. These commands explicitly use `--local`, keeping this database separate from remote D1. The API Worker still needs network access to the HTTPS catalogs at `CATALOG_URL` during initialization.
+`dev:d1` uses [Wrangler's local D1](https://developers.cloudflare.com/d1/best-practices/local-development/). Before starting, it applies pending migrations from `apps/api/src/db/migrations/` and inserts the current `players.json` and `tournaments.json` development data once. D1 state is persisted under `apps/api/.data/wrangler/`; restarts and later JSON edits do not overwrite it. To intentionally recreate the local database, stop both apps and remove that directory. Run `bun run db:setup:local` to perform only the migration and initial import. These commands explicitly use `--local`, keeping this database separate from remote D1. The API Worker still needs network access to the HTTPS catalogs at `CATALOG_URL` during initialization.
 
 Then open <http://localhost:5173/?view=debug>, choose a matchup in the left panel, press **Overlayへ反映**, and the overlay preview on the right updates.
 
@@ -95,9 +95,9 @@ Keep Chrome's page zoom at 100% when comparing the preview against OBS, and do n
 | `bun run --filter web dev` | Runs one workspace alone (`api` works the same way). |
 | `bun run --filter web lint` | ESLint. Only the web app has a lint setup. |
 | `bun run --filter web build` | `tsc -b && vite build`. The only type-check path. |
-| `pnpm run dev:json` | Starts the Bun API and Web with JSON data. |
-| `pnpm run dev:d1` | Prepares local D1, then starts the API Worker and Web. |
-| `pnpm run db:setup:local` | Applies pending migrations and initial data to local D1. |
+| `bun run dev:json` | Starts the Bun API and Web with JSON data. |
+| `bun run dev:d1` | Prepares local D1, then starts the API Worker and Web. |
+| `bun run db:setup:local` | Applies pending migrations and initial data to local D1. |
 | `bun run openapi:build` | Generates the static Scalar viewer and `openapi.yaml` under `dist/openapi/` without starting the API or loading runtime data. |
 | `bun run db:migrate` | Applies pending SQL migrations to the configured D1 database. |
 | `D1_SEED_DEVELOPMENT_DATA=1 bun run db:setup` | Applies migrations and inserts JSON development data once into the configured D1 database. |
