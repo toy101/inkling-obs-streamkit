@@ -1,6 +1,6 @@
 import { cors } from "@elysia/cors";
 import { openapi } from "@elysia/openapi";
-import { Elysia } from "elysia";
+import { Elysia, type ElysiaAdapter } from "elysia";
 
 import apiPackage from "../package.json" with { type: "json" };
 import type { DataSource } from "./create-data-source";
@@ -9,10 +9,11 @@ import { models } from "./models";
 type CreateAppOptions = {
   dataSource: DataSource;
   webOrigins: string[];
+  adapter?: ElysiaAdapter;
 };
 
-export function createApp({ dataSource, webOrigins }: CreateAppOptions) {
-  return new Elysia()
+export function createApp({ dataSource, webOrigins, adapter }: CreateAppOptions) {
+  return new Elysia(adapter ? { adapter } : {})
     .use(
       cors({
         credentials: false,

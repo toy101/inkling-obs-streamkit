@@ -6,6 +6,8 @@
   "scripts": {
     "prepare:assets": "bun run ../../scripts/prepare-runtime-assets.ts web",
     "dev": "bun run prepare:assets && vite",
+    "dev:json": "bun run dev",
+    "dev:d1": "VITE_API_URL=http://127.0.0.1:8787 bun run dev",
     "build": "bun run prepare:assets && tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",

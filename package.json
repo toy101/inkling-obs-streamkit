@@ -8,14 +8,16 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "bun run --parallel db:dev dev:apps",
+    "dev": "bun run dev:apps",
     "dev:apps": "bun run --parallel --filter './apps/*' dev",
+    "dev:json": "bun run --parallel --filter './apps/*' dev:json",
+    "dev:d1": "bun run --parallel --filter './apps/*' dev:d1",
     "openapi:build": "bun run scripts/generate-openapi.ts",
     "spellcheck": "cspell lint . --no-progress",
-    "db:dev": "bun run --filter api db:dev",
     "db:migrate": "bun run --filter api db:migrate",
     "db:seed": "bun run --filter api db:seed",
-    "db:setup": "bun run --filter api db:setup"
+    "db:setup": "bun run --filter api db:setup",
+    "db:setup:local": "bun run --filter api db:setup:local"
   },
   "devDependencies": {
     "@types/bun": "latest",
