@@ -31,7 +31,7 @@ Run these commands at the repository root. The two `.env.local` files are ignore
 
 The API reads player and tournament JSON under `apps/api/src/data/` by default, so database setup is unnecessary while the data model is being adjusted. Before the apps start, a preparation script downloads any missing runtime assets: the weapon, rule and stage catalogs go under `apps/api/src/data/`, while the stage-reveal vignette goes under `apps/web/public/`. Existing files are kept without another CDN request. Bun's watch mode reloads the API after local source files change.
 
-Choose the development data source from the repository root. `pnpm run` only invokes these scripts; dependency installation and the application runtime still use Bun.
+Choose the development data source from the repository root. `pnpm run` only invokes these scripts; dependency installation and the application runtime still use Bun. If pnpm is not installed, use `bun run dev:json` or `bun run dev:d1` instead.
 
 ```bash
 pnpm run dev:json  # Web :5173 + Bun API :3000, reading the current JSON files

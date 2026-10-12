@@ -51,6 +51,7 @@ async function query(body: D1Query | { batch: D1Query[] }, expectedResults: numb
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(10_000),
   });
   const payload: unknown = await response.json();
   if (!isRecord(payload)) throw new Error("D1 returned an invalid response.");
