@@ -22,7 +22,11 @@ export function readPortEnvironmentVariable(name: string): number {
 }
 
 export function readOriginListEnvironmentVariable(name: string): string[] {
-  const origins = requireEnvironmentVariable(name)
+  return parseOriginList(requireEnvironmentVariable(name), name);
+}
+
+export function parseOriginList(value: string, name: string): string[] {
+  const origins = value
     .split(",")
     .map((value) => value.trim())
     .filter((value) => value !== "")
@@ -54,7 +58,10 @@ export function readOriginListEnvironmentVariable(name: string): string[] {
 }
 
 export function readHttpsOriginEnvironmentVariable(name: string): string {
-  const value = requireEnvironmentVariable(name);
+  return parseHttpsOrigin(requireEnvironmentVariable(name), name);
+}
+
+export function parseHttpsOrigin(value: string, name: string): string {
   let url: URL;
   try {
     url = new URL(value);

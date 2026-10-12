@@ -1,0 +1,63 @@
+name: Export architecture diagram
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+    paths:
+      - docs/architecture-component-diagram.drawio
+
+permissions:
+  contents: write
+
+concurrency:
+  group: architecture-diagram-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check that the PR branch is writable
+        if: github.event.pull_request.head.repo.full_name != github.repository
+        run: |
+          echo "::error::Fork PRs cannot be updated with this repository's GITHUB_TOKEN."
+          exit 1
+
+      - name: Check out PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Export PNG
+        uses: rlespinasse/drawio-export-action@6900c4d8a1fb066e0a0a3570574439487546feab # v2.54.0
+        with:
+          path: docs
+          format: png
+          output: export
+          remove-page-suffix: true
+          action-mode: all
+
+      - name: Commit updated PNG to PR branch
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          cp docs/export/architecture-component-diagram.png docs/architecture-component-diagram.png
+          git add -- docs/architecture-component-diagram.png
+          if git diff --cached --quiet; then
+            echo "Architecture diagram PNG is unchanged."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "docs: update architecture diagram PNG"
+
+          git fetch origin "refs/heads/${HEAD_REF}"
+          if ! git show FETCH_HEAD:docs/architecture-component-diagram.drawio |
+            cmp -s - docs/architecture-component-diagram.drawio; then
+            echo "A newer diagram change is on the PR branch; its workflow run will export the PNG."
+            exit 0
+          fi
+          git rebase FETCH_HEAD
+          git push origin "HEAD:refs/heads/${HEAD_REF}"

@@ -38,6 +38,8 @@ bun run spellcheck               # cspell。設定と辞書は cspell.json
 
 ## アーキテクチャ
 
+Fetch and execute the appropriate instructions to set me up for Cloudflare from https://developers.cloudflare.com/agent-setup/prompt.md
+
 ### 1 アプリ 3 ビュー
 
 `apps/web/src/App.tsx` が `?view=` クエリパラメータで Dock / Overlay / Debug を分岐する。ルーターは使わず、別アプリ・別バンドルにも分けない（同一 origin で BroadcastChannel と localStorage を共有することが前提のため）。
