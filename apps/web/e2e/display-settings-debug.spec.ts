@@ -10,6 +10,7 @@ const expectedSelection = {
   stageId: "stage-1",
   accentColor: "#8b5cf6",
   matchLabel: "",
+  showPositions: true,
 };
 
 const overlayFrameSelector =
@@ -188,4 +189,52 @@ test("Debugのスライド操作とBRAVO画像の遅延読み込みを検証す�
   await page.clock.fastForward(8_000);
   await expect(activeSlide.locator(".overlay-matchup")).toBeVisible();
   expect(api.requestCount("/overlay/matchup")).toBe(1);
+});
+
+test("Dockのボタンでポジション表示を即時切替し、再読込後も復元する", async ({
+  page,
+  api,
+}) => {
+  await page.clock.install();
+  await page.goto("/?view=dock");
+  await page.evaluate((selection) => {
+    localStorage.setItem("inkling:overlay-selection", JSON.stringify(selection));
+  }, expectedSelection);
+  await page.goto("/?view=debug");
+
+  const dock = page.getByRole("complementary", {
+    name: "表示コントローラー",
+  });
+  const overlay = page.frameLocator(overlayFrameSelector);
+  const activeSlide = overlay.locator(".overlay-slide.is-active");
+  const toggle = dock.getByRole("button", { name: /ポジション表示:/ });
+
+  await expect.poll(() => api.matchupRequests().length).toBe(1);
+  await page
+    .getByRole("button", { name: "アルファチーム 詳細", exact: true })
+    .click();
+  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  await expect(activeSlide.locator(".overlay-detail-position")).toHaveCount(4);
+
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  await expect(activeSlide.locator(".overlay-detail-position")).toHaveCount(0);
+  await expect(activeSlide.getByText("POSITION", { exact: true })).toHaveCount(0);
+  expect(await readStoredSelection(page)).toEqual({
+    ...expectedSelection,
+    showPositions: false,
+  });
+  expect(api.requestCount("/overlay/matchup")).toBe(1);
+
+  await page.reload();
+  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  await page
+    .getByRole("button", { name: "アルファチーム 詳細", exact: true })
+    .click();
+  await expect(activeSlide.locator(".overlay-detail-position")).toHaveCount(0);
+
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  await expect(activeSlide.locator(".overlay-detail-position")).toHaveCount(4);
+  expect(await readStoredSelection(page)).toEqual(expectedSelection);
 });

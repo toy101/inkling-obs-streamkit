@@ -18,6 +18,7 @@ export type OverlaySelection = {
   stageId: string;
   accentColor: string;
   matchLabel: string;
+  showPositions: boolean;
 };
 
 export type StageRevealRequest = {
@@ -79,6 +80,10 @@ function parseOverlaySelection(value: unknown): OverlaySelection | null {
     stageId: getString(value, "stageId") ?? "",
     accentColor: normalizeAccentColor(value["accentColor"]),
     matchLabel: normalizeMatchLabel(value["matchLabel"]),
+    showPositions:
+      typeof value["showPositions"] === "boolean"
+        ? value["showPositions"]
+        : true,
   };
 }
 

@@ -187,6 +187,7 @@ type MatchupCardSlideProps = MatchupSlideProps & {
 };
 
 type OverlayCarouselProps = MatchupCardSlideProps & {
+  showPositions: boolean;
   suspended: boolean;
 };
 
@@ -230,6 +231,7 @@ function MatchupSlide({ matchup, matchLabel }: MatchupCardSlideProps) {
 type TeamDetailSlideProps = {
   loadWeaponImages: boolean;
   position: TeamPosition;
+  showPositions: boolean;
   teamDesignation: TeamDesignation;
   team: OverlayTeam;
 };
@@ -237,14 +239,16 @@ type TeamDetailSlideProps = {
 function TeamDetailSlide({
   loadWeaponImages,
   position,
+  showPositions,
   teamDesignation,
   team,
 }: TeamDetailSlideProps) {
   const teamLabel = teamDesignation === "alpha" ? "ALPHA TEAM" : "BRAVO TEAM";
+  const positionClassName = showPositions ? "" : " is-position-hidden";
 
   return (
     <section
-      className={`overlay-team-detail overlay-team-detail--${position}`}
+      className={`overlay-team-detail overlay-team-detail--${position}${positionClassName}`}
       aria-label={`${team.name}の詳細情報`}
     >
       <header className="overlay-slide-header">
@@ -254,7 +258,7 @@ function TeamDetailSlide({
 
       <div className="overlay-detail-columns" aria-hidden="true">
         <span>PLAYER</span>
-        <span>POSITION</span>
+        {showPositions && <span>POSITION</span>}
         <span>WEAPONS</span>
       </div>
 
@@ -267,9 +271,11 @@ function TeamDetailSlide({
               <strong>{player.registeredName}</strong>
             </div>
 
-            <span className="overlay-detail-position">
-              {player.position?.name ?? "Unknown"}
-            </span>
+            {showPositions && (
+              <span className="overlay-detail-position">
+                {player.position?.name ?? "Unknown"}
+              </span>
+            )}
 
             <div className="overlay-detail-weapons">
               <ul>
@@ -318,6 +324,7 @@ function selectCarouselSlide(
 function OverlayCarousel({
   matchup,
   matchLabel,
+  showPositions,
   suspended,
 }: OverlayCarouselProps) {
   const [carouselState, setCarouselState] = useState<CarouselState>({
@@ -416,6 +423,7 @@ function OverlayCarousel({
         <TeamDetailSlide
           loadWeaponImages
           position="left"
+          showPositions={showPositions}
           teamDesignation="alpha"
           team={matchup.alpha}
         />
@@ -427,6 +435,7 @@ function OverlayCarousel({
         <TeamDetailSlide
           loadWeaponImages={loadBravoTeamImages}
           position="right"
+          showPositions={showPositions}
           teamDesignation="bravo"
           team={matchup.bravo}
         />
@@ -523,6 +532,7 @@ export function Overlay() {
   const stageId = selection?.stageId ?? "";
   const accentColor = selection?.accentColor ?? DEFAULT_ACCENT_COLOR;
   const matchLabel = selection?.matchLabel ?? "";
+  const showPositions = selection?.showPositions ?? true;
   const dataSelectionKey = getMatchupDataSelectionKey({
     tournamentId,
     alphaTournamentTeamId,
@@ -792,6 +802,7 @@ export function Overlay() {
           key={dataSelectionKey}
           matchup={matchup}
           matchLabel={matchLabel}
+          showPositions={showPositions}
           suspended={stageRevealPlayback !== null}
         />
       )}

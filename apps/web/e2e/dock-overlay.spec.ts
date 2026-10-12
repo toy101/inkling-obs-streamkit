@@ -10,6 +10,7 @@ const expectedSelection = {
   stageId: "stage-1",
   accentColor: "#8b5cf6",
   matchLabel: "",
+  showPositions: true,
 };
 
 async function setStoredSelection(page: Page, value: string): Promise<void> {
@@ -166,6 +167,7 @@ test("有効な保存状態を再読込後に復元する", async ({ page, api }
   await expect(dock.getByLabel("ルール")).toHaveValue("rule-1");
   await expect(dock.getByLabel("ステージ")).toHaveValue("stage-1");
   await expect(dock.getByLabel("対戦名")).toHaveValue("準決勝");
+  await expect(dock.getByRole("button", { name: "ポジション表示: オン" })).toHaveAttribute("aria-pressed", "true");
 
   await page.reload();
   await expect(dock.getByLabel("大会")).toHaveValue("tournament-a");
@@ -254,6 +256,7 @@ test("未知の保存IDは有効な選択へ正規化して反映する", async 
     stageId: "stage-1",
     accentColor: "#123456",
     matchLabel: "未知",
+    showPositions: true,
   });
 
   await page.goto("/?view=overlay");

@@ -315,6 +315,7 @@ export function Dock() {
       stageId: submittedStageId,
       accentColor: submittedSelection?.accentColor ?? DEFAULT_ACCENT_COLOR,
       matchLabel: submittedSelection?.matchLabel ?? "",
+      showPositions: submittedSelection?.showPositions ?? true,
     };
 
     commitSelection(nextSelection);
@@ -363,10 +364,22 @@ export function Dock() {
     });
   };
 
+  const handlePositionToggle = () => {
+    if (!submittedSelection) {
+      return;
+    }
+
+    commitSelection({
+      ...submittedSelection,
+      showPositions: !submittedSelection.showPositions,
+    });
+  };
+
   const dockStyle: DockStyle = {
     "--dock-accent-color": accentColor,
   };
   const accentHue = getHueFromHex(accentColor);
+  const showPositions = submittedSelection?.showPositions ?? true;
 
   return (
     <main className="dock" style={dockStyle}>
@@ -540,6 +553,19 @@ export function Dock() {
           </button>
         </div>
       </form>
+
+      <section className="dock-form" aria-labelledby="dock-position-heading">
+        <h2 id="dock-position-heading">表示設定</h2>
+        <button
+          aria-pressed={showPositions}
+          className="dock-submit"
+          disabled={!submittedSelection}
+          onClick={handlePositionToggle}
+          type="button"
+        >
+          ポジション表示: {showPositions ? "オン" : "オフ"}
+        </button>
+      </section>
     </main>
   );
 }

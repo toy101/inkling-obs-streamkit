@@ -1131,6 +1131,10 @@ html[data-view="overlay"] body {
   letter-spacing: 0.16em;
 }
 
+.overlay-team-detail.is-position-hidden .overlay-detail-columns {
+  grid-template-columns: 484px minmax(0, 1fr);
+}
+
 .overlay-detail-columns span:last-child {
   padding-left: 32px;
 }
@@ -1168,6 +1172,10 @@ html[data-view="overlay"] body {
     inset 0 -1px 0 rgb(var(--overlay-ink-rgb) / 8%);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
+}
+
+.overlay-team-detail.is-position-hidden .overlay-detail-player {
+  grid-template-columns: 104px 360px minmax(0, 1fr);
 }
 
 .overlay-detail-player .overlay-player-avatar {
