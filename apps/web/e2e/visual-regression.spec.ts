@@ -107,7 +107,12 @@ async function prepareVisualPage(page: Page): Promise<void> {
             for (const track of stream.getTracks()) {
               track.stop();
             }
-            resolve(new Blob(chunks, { type: mimeType }));
+            const blob = new Blob(chunks, { type: mimeType });
+            if (blob.size === 0) {
+              reject(new Error("Encoded video fixture was empty."));
+              return;
+            }
+            resolve(blob);
           });
 
           let recording = true;
@@ -160,7 +165,7 @@ async function prepareVisualPage(page: Page): Promise<void> {
 
 async function getReadyOverlay(page: Page, api: InstalledApiMock): Promise<FrameLocator> {
   const overlayFrame = page.frameLocator(`iframe[title="${OVERLAY_TITLE}"]`);
-  await expect(overlayFrame.locator("main.overlay")).toBeVisible();
+  await expect(overlayFrame.locator("main.overlay")).toBeVisible({ timeout: 15_000 });
   const overlayFrameElement = page.locator(`iframe[title="${OVERLAY_TITLE}"]`);
   const frameBox = await overlayFrameElement.boundingBox();
   if (!frameBox) {
@@ -370,6 +375,109 @@ test("Overlayのステージ紹介は安定したplayingフェーズを表示す
   await expect(
     overlay.locator("main.overlay"),
   ).toHaveScreenshot("overlay-stage-reveal.png", screenshotOptions);
+});
+
+test("Debugのステージ・ルール紹介は遷移後も背景動画をループし、別シーンで終了する", async ({
+  page,
+  api,
+}) => {
+  await prepareVisualPage(page);
+  const overlay = await getReadyOverlay(page, api);
+  const fixtureSize = await overlay.locator("main.overlay").evaluate(async () => {
+    const response = await fetch("/stage-video/fixture.webm");
+    return (await response.blob()).size;
+  });
+  expect(fixtureSize).toBeGreaterThan(0);
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.getByRole("button", { name: "自動切替: オフ", exact: true }).click();
+
+  const overlayRoot = overlay.locator("main.overlay");
+  await overlayRoot.evaluate((element) => {
+    const observer = new MutationObserver(() => {
+      if (element.querySelector(".overlay-stage-reveal.is-entering")) {
+        element.setAttribute("data-stage-reveal-entered", "true");
+        observer.disconnect();
+      }
+    });
+    observer.observe(element, { attributes: true, childList: true, subtree: true });
+  });
+
+  const previewButton = page.getByRole("button", {
+    name: "ステージ・ルール紹介",
+    exact: true,
+  });
+  await expect(previewButton).toBeEnabled();
+  await previewButton.click();
+  await expect(overlayRoot).toHaveAttribute("data-stage-reveal-entered", "true", {
+    timeout: 15_000,
+  });
+
+  const stageReveal = overlay.locator(".overlay-stage-reveal.is-playing");
+  await expect(stageReveal).toBeVisible();
+  const video = stageReveal.locator("video");
+  await expect(video).toHaveJSProperty("loop", true);
+  await expect(video).toHaveJSProperty("paused", false);
+  await expect(overlay.locator(".overlay-carousel")).toHaveAttribute(
+    "data-autoplay",
+    "true",
+  );
+  await expect(overlay.locator(".overlay-carousel.is-paused")).toBeVisible();
+  await expect(
+    stageReveal.getByText(visualFixtureData.matchup.stage.name, { exact: true }),
+  ).toBeVisible();
+  await expect(
+    stageReveal.getByText(visualFixtureData.matchup.rule.name, { exact: true }).first(),
+  ).toBeVisible();
+
+  await video.evaluate((element) => {
+    const media = element as HTMLVideoElement;
+    let previousTime = media.currentTime;
+    media.addEventListener("timeupdate", () => {
+      if (media.currentTime + 0.5 < previousTime) {
+        media.dataset.loopCompleted = "true";
+      }
+      previousTime = media.currentTime;
+    });
+  });
+  await expect(video).toHaveAttribute("data-loop-completed", "true", {
+    timeout: 10_000,
+  });
+  await expect(stageReveal).toBeVisible();
+  await expect(video).toHaveJSProperty("paused", false);
+  await expect(video).toHaveJSProperty("ended", false);
+  await expect.poll(() => api.matchupRequests().length).toBe(1);
+
+  await page.getByRole("button", { name: "アルファチーム 詳細", exact: true }).click();
+  await expect(overlay.locator(".overlay-stage-reveal")).toHaveCount(0);
+  await expect(
+    overlay.locator(".overlay-slide.is-active .overlay-team-detail--left"),
+  ).toBeVisible();
+  await expect(overlay.locator(".overlay-carousel")).toHaveAttribute(
+    "data-autoplay",
+    "true",
+  );
+});
+
+test("通常のステージ紹介はループせず、Debugのシーン操作後も動画の終了まで再生する", async ({
+  page,
+  api,
+}) => {
+  await prepareVisualPage(page);
+  const overlay = await getReadyOverlay(page, api);
+  await page.getByRole("button", { name: "確定・動画再生", exact: true }).click();
+
+  const stageReveal = overlay.locator(".overlay-stage-reveal.is-playing");
+  await expect(stageReveal).toBeVisible({ timeout: 15_000 });
+  await expect(stageReveal.locator("video")).toHaveJSProperty("loop", false);
+  await expect(stageReveal.locator("video")).toHaveJSProperty("paused", false);
+  await page.getByRole("button", { name: "アルファチーム 詳細", exact: true }).click();
+  await expect(stageReveal).toBeVisible();
+  await expect(overlay.locator(".overlay-stage-reveal")).toHaveCount(0, {
+    timeout: 10_000,
+  });
+  await expect(
+    overlay.locator(".overlay-slide.is-active .overlay-team-detail--left"),
+  ).toBeVisible();
 });
 
 export { expect };
