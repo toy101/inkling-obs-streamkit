@@ -424,7 +424,9 @@ test('大会を往復して保存した後も古いチーム一覧の遅延応�
   }
   await mockApi(page, state)
   await connect(page)
+  const firstTeamsRequest = page.waitForRequest('http://127.0.0.1:8787/admin/tournaments/A/teams')
   await page.getByRole('button', { name: /大会A/ }).click()
+  const delayedRequest = await firstTeamsRequest
   await oldRequested
   await page.getByRole('button', { name: /大会B/ }).click()
   await page.getByRole('button', { name: /大会A/ }).click()
@@ -433,7 +435,8 @@ test('大会を往復して保存した後も古いチーム一覧の遅延応�
   await page.getByRole('button', { name: 'チームを更新' }).click()
   await expect(page.getByText('チームを更新しました。')).toBeVisible()
 
-  const oldResponse = page.waitForResponse('http://127.0.0.1:8787/admin/tournaments/A/teams')
+  await expect(page.getByRole('button', { name: 'チームを更新' })).toBeEnabled()
+  const oldResponse = page.waitForResponse((response) => response.request() === delayedRequest)
   releaseOldTeams()
   await (await oldResponse).finished()
   await page.evaluate(() => new Promise<void>((resolve) => {
