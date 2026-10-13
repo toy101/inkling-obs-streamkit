@@ -50,5 +50,6 @@ agent_plan
 
 # media
 *.webm
+!/apps/web/e2e/fixtures/stage-reveal.webm
 *.mp4
 /apps/web/public/stage-reveal-vignette.png
