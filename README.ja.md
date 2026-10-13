@@ -54,6 +54,34 @@ bun run dev:d1    # Web :5173 + API Worker :8787。ローカル D1 を参照
 
 `view` を付けずに開いた場合は、指定できる値を表示するだけ。
 
+## 管理アプリ
+
+`apps/admin` は大会・大会チーム・参加者を登録・更新する、ローカル専用の管理画面。大会名と状態、チームの表示順、最大4人の登録名と参加者の紐付け、参加者のアイコン・ポジション・最大4つの持ちブキを編集できる。参加者を紐付けず、登録名だけで大会へ参加させることもできる。チームは4人未満でも下書き保存できるが、名簿の確定と Overlay の表示には4人必要。
+
+1. `cp apps/admin/.env.example apps/admin/.env.local` を実行する。
+2. `apps/api/.env.local` の `ADMIN_API_TOKEN` に十分に長いランダムな値を設定する（例: `bun -e 'console.log(crypto.randomUUID())'` で生成）。
+3. ローカル D1 は `bun run dev:admin:local` で API Worker、Web、Admin を起動する。
+4. `http://127.0.0.1:5174` を開き、「ローカル D1」を選び、同じ管理トークンを入力して接続する。
+
+```bash
+bun run dev:admin:local       # ローカル D1: API :8787 / Web :5173 / Admin :5174
+bun run dev:admin:production  # 本番 D1: ローカル Bun API :3000 / Web :5173 / Admin :5174
+```
+
+本番 D1 を編集するときは、API の `.env.local` に `CLOUDFLARE_ACCOUNT_ID`、`D1_DATABASE_ID`、D1 の Read と Write 権限を持つ `CLOUDFLARE_API_TOKEN` を設定してから `dev:admin:production` を使う。このコマンドはローカル API から本番 D1 の HTTP API を呼び出す。管理画面や管理 API を Cloudflare へ公開する必要はない。マイグレーションや開発データの投入も自動実行しない。
+
+接続先 URL は Admin の `VITE_LOCAL_API_URL` と `VITE_PRODUCTION_API_URL` で指定する。画面で環境を切り替えても API プロセスは起動しないため、対応する API を起動しておく。画面は `/admin/status` で API が返す環境と選択を照合し、一致した接続でのみ保存を許可する。環境変更時は認証情報・表示データ・編集中の内容を解除する。
+
+管理トークンはブラウザのメモリだけで保持し、Cloudflare の認証情報は API プロセスだけに置く。`VITE_` 変数へトークンを設定しない。API は `ADMIN_ALLOWED_ORIGINS` の origin と Bearer トークンを検証し、トークン未設定または JSON モードでは管理操作を拒否する。公開 API Worker も管理トークン未設定なら管理操作を受け付けない。
+
+保存したデータは既存の Web API と Overlay が読む D1 の同じテーブルへ反映される。既に開いている Dock / Overlay に再取得させるには、そのページを再読み込みする。従来の `bun dev`、`dev:json`、`dev:d1` は Web と API だけを起動する。
+
+```bash
+bun run --filter admin lint
+bun run --filter admin build
+bun run --filter admin test:e2e
+```
+
 ## OBS の設定
 
 | 用途 | URL | サイズ |
@@ -81,6 +109,7 @@ bun run dev:d1    # Web :5173 + API Worker :8787。ローカル D1 を参照
 .
 ├── apps/
 │   ├── web/    Vite + React + TypeScript。Dock / Overlay / Debug。
+│   ├── admin/  ローカル専用の大会・チーム・参加者管理画面。
 │   └── api/    Bun または Worker 上の Elysia。ローカル JSON、D1 接続、マイグレーション、初期データ。
 ├── packages/   共通ドメイン型用の予約枠（現時点では空）
 └── cspell.json
@@ -93,7 +122,7 @@ bun run dev:d1    # Web :5173 + API Worker :8787。ローカル D1 を参照
 | `bun dev` | web と API を並列起動する。 |
 | `bun run dev:apps` | web と API を並列起動する。 |
 | `bun run --filter web dev` | 片方のワークスペースだけ起動する（`api` も同様）。 |
-| `bun run --filter web lint` | ESLint。lint 設定があるのは web のみ。 |
+| `bun run --filter web lint` | Web の ESLint。Admin は `--filter admin lint`。 |
 | `bun run --filter web build` | `tsc -b && vite build`。唯一の型チェック経路。 |
 | `bun run dev:json` | JSON 参照の Bun API と Web を起動する。 |
 | `bun run dev:d1` | ローカル D1 を準備し、API Worker と Web を起動する。 |
@@ -119,7 +148,7 @@ bun run --filter web test:e2e -- --update-snapshots
 
 コミット前に `apps/web/e2e/visual-regression.spec.ts-snapshots/` 以下の変更されたPNGを確認する。baselineはGitHub ActionsのUbuntu上のChromiumと同じ `chromium-linux` project（`*-chromium-linux.png`）だけを正とする。macOSやWindowsで生成したplatform別PNGは正規baselineにせず、更新は同じLinux Chromium環境で行う。Pull Requestの `web-smoke` workflow はテスト失敗時に `apps/web/test-results/` のactual screenshot、diff、traceと、Git管理しているexpected baselineをartifactとして保存する。このブラウザ検証はOBS CEFとの完全なピクセル一致を保証しない。OBS実機確認は別ゲートで行う。
 
-Pull Request では、クリーンな checkout 上で `quality` チェックを実行する。Bun 1.4.2 と frozen lockfile を使い、Git管理外の実行時パスには決定的なfixtureを用意してから、API の型チェック、web の lint、web の build、spellcheck を順に検査する。追跡対象の TypeScript アダプターとスキーマ SQL を使うため、`.env.local`、ローカル DB、CDN、イカクロ API には依存しない。
+Pull Request では、クリーンな checkout 上で `quality` チェックを実行する。Bun 1.4.2 と frozen lockfile を使い、Git管理外の実行時パスには決定的なfixtureを用意してから、API の型チェック、Web と Admin の lint/build、spellcheck を検査する。`admin-smoke` はモック API を使って管理画面の登録・更新と接続環境の照合を検証する。追跡対象の TypeScript アダプターとスキーマ SQL を使うため、`.env.local`、ローカル DB、CDN、イカクロ API には依存しない。
 
 ## APIリファレンス
 

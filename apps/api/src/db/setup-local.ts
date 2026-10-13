@@ -1,4 +1,4 @@
-import { mkdir } from "node:fs/promises";
+import { chmod, mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import { parseCatalogBaseUrl } from "../../../../scripts/prepare-runtime-assets";
@@ -45,7 +45,11 @@ async function writeLocalVars(): Promise<void> {
     `CATALOG_URL=${JSON.stringify(catalogUrl)}`,
     `CORS_ALLOWED_ORIGINS=${JSON.stringify("http://localhost:5173,http://127.0.0.1:5173")}`,
     `IKACLO_API_ORIGIN=${JSON.stringify(imageOrigin)}`,
+    `ADMIN_ENVIRONMENT="local"`,
+    `ADMIN_ALLOWED_ORIGINS=${JSON.stringify("http://localhost:5174,http://127.0.0.1:5174")}`,
+    `ADMIN_API_TOKEN=${JSON.stringify(process.env.ADMIN_API_TOKEN?.trim() ?? "")}`,
   ].join("\n") + "\n");
+  await chmod(varsPath, 0o600);
 }
 
 await mkdir(resolve(apiRoot, ".data"), { recursive: true });

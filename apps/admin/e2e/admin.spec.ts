@@ -1,0 +1,444 @@
+import { expect, test, type Page, type Route } from '@playwright/test'
+
+interface MockState {
+  environment: 'local' | 'production'
+  failNextPlayerSave: boolean
+  failNextTournamentList?: boolean
+  failTournamentRefreshAfterCreate?: boolean
+  statusRequested?: () => void
+  statusWait?: Promise<void>
+  teamSaveRequested?: () => void
+  teamSaveWait?: Promise<void>
+  teamsResponse?: (tournamentId: string) => Promise<MockState['teams']>
+  teamPutBodies?: Array<{
+    name: string
+    displayOrder: number
+    rosterLocked: boolean
+    roster: Array<{ id: string | null; registeredName: string; playerId: string | null }>
+  }>
+  players: Array<{
+    id: string
+    displayName: string
+    iconUrl: string | null
+    position: { id: string; name: string } | null
+    weaponIds: string[]
+  }>
+  tournaments: Array<{
+    id: string
+    organizerUserId: string
+    name: string
+    status: 'draft' | 'registration' | 'locked' | 'archived'
+    createdAt: string
+    updatedAt: string
+  }>
+  teams: Array<{
+    id: string
+    tournamentId: string
+    name: string
+    displayOrder: number
+    rosterLockedAt: string | null
+    roster: Array<{
+      id: string
+      tournamentTeamId: string
+      registeredName: string
+      displayOrder: number
+      playerId: string | null
+    }>
+  }>
+}
+
+const positions = [{ id: 'front', name: '前衛' }, { id: 'back', name: '後衛' }]
+const weapons = [{ id: 'w1', name: 'スプラシューター' }, { id: 'w2', name: 'スプラチャージャー' }]
+
+function json(route: Route, body: unknown, status = 200) {
+  return route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) })
+}
+
+async function mockApi(page: Page, state: MockState, apiPort = 8787) {
+  await page.route(`http://127.0.0.1:${apiPort}/**`, async (route) => {
+    const request = route.request()
+    const url = new URL(request.url())
+    const path = url.pathname
+    const method = request.method()
+
+    if (path.startsWith('/admin/') && request.headers().authorization !== 'Bearer secret') {
+      return json(route, { message: '管理トークンが正しくありません。' }, 401)
+    }
+    if (path === '/weapons') return json(route, weapons)
+    if (path === '/admin/status') {
+      state.statusRequested?.()
+      await state.statusWait
+      return json(route, { environment: state.environment })
+    }
+    if (path === '/admin/positions') return json(route, positions)
+    if (path === '/admin/players' && method === 'GET') return json(route, state.players)
+    if (path === '/admin/players' && method === 'POST') {
+      if (state.failNextPlayerSave) {
+        state.failNextPlayerSave = false
+        return json(route, { message: '同名の参加者が登録されています。' }, 409)
+      }
+      const body = request.postDataJSON() as { displayName: string; iconUrl: string | null; positionId: string | null; weaponIds: string[] }
+      const player = { id: `player-${state.players.length + 1}`, displayName: body.displayName, iconUrl: body.iconUrl, position: positions.find((item) => item.id === body.positionId) ?? null, weaponIds: body.weaponIds }
+      state.players.push(player)
+      return json(route, player, 201)
+    }
+    const playerMatch = path.match(/^\/admin\/players\/([^/]+)$/)
+    if (playerMatch && method === 'PUT') {
+      const body = request.postDataJSON() as { displayName: string; iconUrl: string | null; positionId: string | null; weaponIds: string[] }
+      const index = state.players.findIndex((item) => item.id === playerMatch[1])
+      const player = { ...state.players[index], displayName: body.displayName, iconUrl: body.iconUrl, position: positions.find((item) => item.id === body.positionId) ?? null, weaponIds: body.weaponIds }
+      state.players[index] = player
+      return json(route, player)
+    }
+    if (path === '/admin/tournaments' && method === 'GET') {
+      if (state.failNextTournamentList) {
+        state.failNextTournamentList = false
+        return json(route, { message: '大会一覧を再取得できません。' }, 503)
+      }
+      return json(route, state.tournaments)
+    }
+    if (path === '/admin/tournaments' && method === 'POST') {
+      const body = request.postDataJSON() as { name: string; status: MockState['tournaments'][number]['status'] }
+      const tournament = { id: `tournament-${state.tournaments.length + 1}`, organizerUserId: 'admin', name: body.name, status: body.status, createdAt: '2026-10-13T00:00:00.000Z', updatedAt: '2026-10-13T00:00:00.000Z' }
+      state.tournaments.push(tournament)
+      if (state.failTournamentRefreshAfterCreate) state.failNextTournamentList = true
+      return json(route, tournament, 201)
+    }
+    const tournamentMatch = path.match(/^\/admin\/tournaments\/([^/]+)$/)
+    if (tournamentMatch && method === 'PUT') {
+      const body = request.postDataJSON() as { name: string; status: MockState['tournaments'][number]['status'] }
+      const index = state.tournaments.findIndex((item) => item.id === tournamentMatch[1])
+      state.tournaments[index] = { ...state.tournaments[index], ...body }
+      return json(route, state.tournaments[index])
+    }
+    const teamsMatch = path.match(/^\/admin\/tournaments\/([^/]+)\/teams$/)
+    if (teamsMatch && method === 'GET') {
+      const teams = state.teamsResponse
+        ? await state.teamsResponse(teamsMatch[1])
+        : state.teams.filter((item) => item.tournamentId === teamsMatch[1])
+      return json(route, teams)
+    }
+    if (teamsMatch && method === 'POST') {
+      const body = request.postDataJSON() as { name: string; displayOrder: number; rosterLocked: boolean; roster: Array<{ id: string | null; registeredName: string; playerId: string | null }> }
+      const teamId = `team-${state.teams.length + 1}`
+      const team = { id: teamId, tournamentId: teamsMatch[1], name: body.name, displayOrder: body.displayOrder, rosterLockedAt: body.rosterLocked ? '2026-10-13T00:00:00.000Z' : null, roster: body.roster.map((entry, index) => ({ id: entry.id ?? `${teamId}-roster-${index + 1}`, tournamentTeamId: teamId, registeredName: entry.registeredName, displayOrder: index + 1, playerId: entry.playerId })) }
+      state.teams.push(team)
+      return json(route, team, 201)
+    }
+    const teamMatch = path.match(/^\/admin\/tournaments\/([^/]+)\/teams\/([^/]+)$/)
+    if (teamMatch && method === 'PUT') {
+      state.teamSaveRequested?.()
+      await state.teamSaveWait
+      const body = request.postDataJSON() as NonNullable<MockState['teamPutBodies']>[number]
+      state.teamPutBodies?.push(body)
+      const index = state.teams.findIndex((item) => item.id === teamMatch[2] && item.tournamentId === teamMatch[1])
+      const current = state.teams[index]
+      const team = {
+        ...current,
+        name: body.name,
+        displayOrder: body.displayOrder,
+        rosterLockedAt: body.rosterLocked ? '2026-10-13T00:00:00.000Z' : null,
+        roster: body.roster.map((entry, rosterIndex) => ({
+          id: entry.id ?? `${current.id}-roster-${rosterIndex + 1}`,
+          tournamentTeamId: current.id,
+          registeredName: entry.registeredName,
+          displayOrder: rosterIndex + 1,
+          playerId: entry.playerId,
+        })),
+      }
+      state.teams[index] = team
+      return json(route, team)
+    }
+    return json(route, { message: `Unhandled ${method} ${path}` }, 404)
+  })
+}
+
+async function connect(page: Page) {
+  await page.goto('/')
+  await page.getByLabel('管理トークン').fill('secret')
+  await page.getByRole('button', { name: '接続する' }).click()
+  await expect(page.getByText('接続済み')).toBeVisible()
+}
+
+test('参加者を登録・編集し、再接続後も一覧へ反映する', async ({ page }) => {
+  const state: MockState = { environment: 'local', failNextPlayerSave: false, players: [], tournaments: [], teams: [] }
+  await mockApi(page, state)
+  await connect(page)
+  await page.getByRole('button', { name: '参加者', exact: true }).click()
+  await page.getByLabel('参加者名 必須').fill('ヤチヨ')
+  await page.getByLabel('ポジション').selectOption('front')
+  await page.getByRole('button', { name: 'ブキを追加' }).click()
+  await page.getByRole('button', { name: '参加者を登録' }).click()
+  await expect(page.getByText('参加者を登録しました。')).toBeVisible()
+
+  await page.getByLabel('参加者名 必須').fill('ヤチヨ改')
+  await page.getByRole('button', { name: '変更を保存' }).click()
+  await expect(page.getByText('参加者を更新しました。')).toBeVisible()
+
+  await page.reload()
+  await page.getByLabel('管理トークン').fill('secret')
+  await page.getByRole('button', { name: '接続する' }).click()
+  await page.getByRole('button', { name: '参加者', exact: true }).click()
+  await expect(page.getByRole('button', { name: /ヤチヨ改/ })).toBeVisible()
+})
+
+test('保存失敗をフォーム内に表示し、重複ブキを選べない', async ({ page }) => {
+  const state: MockState = { environment: 'local', failNextPlayerSave: true, players: [], tournaments: [], teams: [] }
+  await mockApi(page, state)
+  await connect(page)
+  await page.getByRole('button', { name: '参加者', exact: true }).click()
+  await page.getByLabel('参加者名 必須').fill('重複ユーザー')
+  await page.getByRole('button', { name: 'ブキを追加' }).click()
+  await page.getByRole('button', { name: 'ブキを追加' }).click()
+  const secondWeapon = page.getByLabel('持ちブキ 2')
+  await expect(secondWeapon.locator('option[value="w1"]')).toBeDisabled()
+  await page.getByRole('button', { name: '参加者を登録' }).click()
+  await expect(page.getByRole('alert')).toContainText('同名の参加者が登録されています。')
+})
+
+test('環境不一致を拒否し、接続先切替で資格情報と編集状態を破棄する', async ({ page }) => {
+  const localState: MockState = { environment: 'production', failNextPlayerSave: false, players: [], tournaments: [], teams: [] }
+  const productionState: MockState = { environment: 'production', failNextPlayerSave: false, players: [], tournaments: [], teams: [] }
+  await mockApi(page, localState)
+  await mockApi(page, productionState, 3000)
+  await page.goto('/')
+  await page.getByLabel('管理トークン').fill('secret')
+  await page.getByRole('button', { name: '接続する' }).click()
+  await expect(page.getByRole('alert')).toContainText('接続先の環境が一致しません')
+
+  await page.getByRole('button', { name: '本番環境 D1' }).click()
+  await expect(page.getByLabel('管理トークン')).toHaveValue('')
+  await expect(page.getByText('本番データへ接続します')).toBeVisible()
+  await page.getByLabel('管理トークン').fill('secret')
+  await page.getByRole('button', { name: '接続する' }).click()
+  await expect(page.getByText('接続済み')).toBeVisible()
+  await expect(page.getByText('本番環境 D1 に接続中')).toBeVisible()
+})
+
+test('チームの同一参加者を複数枠へ割り当てられない', async ({ page }) => {
+  const state: MockState = {
+    environment: 'local',
+    failNextPlayerSave: false,
+    players: [{ id: 'p1', displayName: 'Player 1', iconUrl: null, position: null, weaponIds: [] }],
+    tournaments: [{ id: 't1', organizerUserId: 'admin', name: '大会 1', status: 'draft', createdAt: '2026-10-13T00:00:00.000Z', updatedAt: '2026-10-13T00:00:00.000Z' }],
+    teams: [],
+  }
+  await mockApi(page, state)
+  await connect(page)
+  await page.getByRole('button', { name: /大会 1/ }).click()
+  await page.getByRole('button', { name: '参加枠を追加' }).click()
+  await page.getByLabel('参加者 1 紐付け').selectOption('p1')
+  await expect(page.getByLabel('参加者 2 紐付け').locator('option[value="p1"]')).toHaveAttribute('disabled', '')
+  await expect(page.locator('.roster-fieldset legend')).toContainText('2/4')
+  await expect(page.locator('.roster-fieldset legend')).toContainText('未完成のまま保存できます')
+})
+
+test('大会と4人チームを作成・更新し、再接続後も保存内容とロスターIDを維持する', async ({ page }) => {
+  const teamPutBodies: NonNullable<MockState['teamPutBodies']> = []
+  const state: MockState = {
+    environment: 'local',
+    failNextPlayerSave: false,
+    teamPutBodies,
+    players: Array.from({ length: 4 }, (_, index) => ({
+      id: `p${index + 1}`,
+      displayName: `Player ${index + 1}`,
+      iconUrl: null,
+      position: null,
+      weaponIds: [],
+    })),
+    tournaments: [],
+    teams: [],
+  }
+  await mockApi(page, state)
+  await connect(page)
+
+  await page.getByLabel('大会名 必須').fill('ツクヨミ杯')
+  await page.getByLabel('状態').selectOption('registration')
+  await page.getByRole('button', { name: '大会を作成' }).click()
+  await expect(page.getByText('大会を作成しました。')).toBeVisible()
+
+  await page.getByLabel('大会名 必須').fill('ツクヨミ杯 Final')
+  await page.getByLabel('状態').selectOption('locked')
+  await page.getByRole('button', { name: '大会を更新' }).click()
+  await expect(page.getByText('大会を更新しました。')).toBeVisible()
+
+  await page.getByRole('button', { name: '参加者', exact: true }).click()
+  await page.getByRole('button', { name: '大会・チーム', exact: true }).click()
+  await expect(page.getByLabel('大会名 必須')).toHaveValue('ツクヨミ杯 Final')
+  await expect(page.getByLabel('状態')).toHaveValue('locked')
+
+  await page.getByLabel('チーム名 必須').fill('月影')
+  await page.getByLabel('表示順').fill('2')
+  await page.getByLabel('ロスターを確定').check()
+  for (let index = 1; index <= 4; index += 1) {
+    if (index > 1) await page.getByRole('button', { name: '参加枠を追加' }).click()
+    await page.getByLabel(`参加者 ${index} 登録名`).fill(`登録名 ${index}`)
+    await page.getByLabel(`参加者 ${index} 紐付け`).selectOption(`p${index}`)
+  }
+  await page.getByRole('button', { name: 'チームを登録' }).click()
+  await expect(page.getByText('チームを登録しました。')).toBeVisible()
+  await expect(page.getByRole('button', { name: /月影.*4\/4 登録済み/ })).toBeVisible()
+
+  const createdRosterIds = state.teams[0].roster.map((entry) => entry.id)
+  await page.getByLabel('チーム名 必須').fill('月影・改')
+  await page.getByLabel('表示順').fill('4')
+  await page.getByRole('button', { name: 'チームを更新' }).click()
+  await expect(page.getByText('チームを更新しました。')).toBeVisible()
+  expect(teamPutBodies).toHaveLength(1)
+  expect(teamPutBodies[0].roster.map((entry) => entry.id)).toEqual(createdRosterIds)
+  expect(teamPutBodies[0]).toMatchObject({ name: '月影・改', displayOrder: 4, rosterLocked: true })
+
+  await page.getByRole('button', { name: '切断' }).click()
+  await page.getByLabel('管理トークン').fill('secret')
+  await page.getByRole('button', { name: '接続する' }).click()
+  await page.getByRole('button', { name: /ツクヨミ杯 Final/ }).click()
+  await expect(page.getByRole('button', { name: /月影・改.*4\/4 登録済み/ })).toBeVisible()
+})
+
+test('接続応答待ちで環境を切り替えても古い環境のデータを復元しない', async ({ page }) => {
+  let releaseStatus = () => {}
+  const statusWait = new Promise<void>((resolve) => { releaseStatus = resolve })
+  let signalStatusRequested = () => {}
+  const statusRequested = new Promise<void>((resolve) => { signalStatusRequested = resolve })
+  const localState: MockState = {
+    environment: 'local',
+    failNextPlayerSave: false,
+    statusRequested: signalStatusRequested,
+    statusWait,
+    players: [{ id: 'local-player', displayName: '遅延ローカル参加者', iconUrl: null, position: null, weaponIds: [] }],
+    tournaments: [],
+    teams: [],
+  }
+  const productionState: MockState = {
+    environment: 'production',
+    failNextPlayerSave: false,
+    players: [{ id: 'production-player', displayName: '本番参加者', iconUrl: null, position: null, weaponIds: [] }],
+    tournaments: [],
+    teams: [],
+  }
+  await mockApi(page, localState)
+  await mockApi(page, productionState, 3000)
+  await page.goto('/')
+  await page.getByLabel('管理トークン').fill('secret')
+  await page.getByRole('button', { name: '接続する' }).click()
+  await statusRequested
+
+  await page.getByRole('button', { name: '本番環境 D1' }).click()
+  await page.getByLabel('管理トークン').fill('secret')
+  await page.getByRole('button', { name: '接続する' }).click()
+  await expect(page.getByText('接続済み')).toBeVisible()
+  releaseStatus()
+
+  await page.getByRole('button', { name: '参加者', exact: true }).click()
+  await expect(page.getByRole('button', { name: /本番参加者/ })).toBeVisible()
+  await expect(page.getByText('遅延ローカル参加者')).toHaveCount(0)
+})
+
+test('大会保存後の一覧再取得が失敗しても保存済み応答を保持し、重複作成しない', async ({ page }) => {
+  const state: MockState = {
+    environment: 'local',
+    failNextPlayerSave: false,
+    failTournamentRefreshAfterCreate: true,
+    players: [],
+    tournaments: [],
+    teams: [],
+  }
+  await mockApi(page, state)
+  await connect(page)
+  await page.getByLabel('大会名 必須').fill('再取得失敗テスト')
+  await page.getByRole('button', { name: '大会を作成' }).click()
+
+  await expect(page.getByText(/保存済みですが、一覧の取得に失敗しました/)).toBeVisible()
+  await expect(page.getByRole('button', { name: '大会を更新' })).toBeVisible()
+  await expect(page.getByRole('button', { name: /再取得失敗テスト/ })).toBeVisible()
+
+  await page.getByLabel('大会名 必須').fill('再取得失敗テスト・更新')
+  await page.getByRole('button', { name: '大会を更新' }).click()
+  expect(state.tournaments).toHaveLength(1)
+  expect(state.tournaments[0].name).toBe('再取得失敗テスト・更新')
+})
+
+test('チームの保存中は大会・チーム・編集画面の切替を防ぐ', async ({ page }) => {
+  let releaseSave = () => {}
+  const teamSaveWait = new Promise<void>((resolve) => { releaseSave = resolve })
+  let markRequested = () => {}
+  const saveRequested = new Promise<void>((resolve) => { markRequested = resolve })
+  const state: MockState = {
+    environment: 'local', failNextPlayerSave: false,
+    teamSaveWait, teamSaveRequested: markRequested, players: [],
+    tournaments: ['A', 'B'].map((letter) => ({
+      id: letter, organizerUserId: 'admin', name: `大会${letter}`, status: 'draft',
+      createdAt: '2026-10-13T00:00:00.000Z', updatedAt: '2026-10-13T00:00:00.000Z',
+    })),
+    teams: ['1', '2'].map((number) => ({
+      id: `team${number}`, tournamentId: 'A', name: `チーム${number}`,
+      displayOrder: Number(number), rosterLockedAt: null, roster: [],
+    })),
+  }
+  await mockApi(page, state)
+  await connect(page)
+  await page.getByRole('button', { name: /大会A/ }).click()
+  await page.getByRole('button', { name: /チーム1 表示順/ }).click()
+  await page.getByLabel('チーム名 必須').fill('チーム1・更新済')
+  await page.getByRole('button', { name: 'チームを更新' }).click()
+  await saveRequested
+  try {
+    await expect(page.getByRole('button', { name: /大会B/ })).toBeDisabled()
+    await expect(page.getByRole('button', { name: /チーム2 表示順/ })).toBeDisabled()
+    await expect(page.getByRole('button', { name: '新規チーム' })).toBeDisabled()
+    await expect(page.getByRole('button', { name: '参加者', exact: true })).toBeDisabled()
+    await expect(page.getByLabel('チーム名 必須')).toBeDisabled()
+  } finally {
+    releaseSave()
+  }
+  await expect(page.getByText('チームを更新しました。')).toBeVisible()
+  await page.getByRole('button', { name: /大会B/ }).click()
+  await expect(page.getByLabel('大会名 必須')).toHaveValue('大会B')
+  await expect(page.getByLabel('チーム名 必須')).toHaveValue('')
+  expect(state.teams).toHaveLength(2)
+  expect(state.teams[0].name).toBe('チーム1・更新済')
+})
+
+test('大会を往復して保存した後も古いチーム一覧の遅延応答で上書きしない', async ({ page }) => {
+  let releaseOldTeams = () => {}
+  const oldTeamsWait = new Promise<void>((resolve) => { releaseOldTeams = resolve })
+  let markOldRequested = () => {}
+  const oldRequested = new Promise<void>((resolve) => { markOldRequested = resolve })
+  let requestsForA = 0
+  const state: MockState = {
+    environment: 'local', failNextPlayerSave: false, players: [],
+    tournaments: ['A', 'B'].map((letter) => ({
+      id: letter, organizerUserId: 'admin', name: `大会${letter}`, status: 'draft',
+      createdAt: '2026-10-13T00:00:00.000Z', updatedAt: '2026-10-13T00:00:00.000Z',
+    })),
+    teams: [{ id: 'team1', tournamentId: 'A', name: '新しいチーム', displayOrder: 1, rosterLockedAt: null, roster: [] }],
+  }
+  state.teamsResponse = async (tournamentId) => {
+    const teams = structuredClone(state.teams.filter((team) => team.tournamentId === tournamentId))
+    if (tournamentId === 'A' && ++requestsForA === 1) {
+      teams[0].name = '古いチーム'
+      markOldRequested()
+      await oldTeamsWait
+    }
+    return teams
+  }
+  await mockApi(page, state)
+  await connect(page)
+  await page.getByRole('button', { name: /大会A/ }).click()
+  await oldRequested
+  await page.getByRole('button', { name: /大会B/ }).click()
+  await page.getByRole('button', { name: /大会A/ }).click()
+  await page.getByRole('button', { name: /新しいチーム 表示順/ }).click()
+  await page.getByLabel('チーム名 必須').fill('チーム・保存済')
+  await page.getByRole('button', { name: 'チームを更新' }).click()
+  await expect(page.getByText('チームを更新しました。')).toBeVisible()
+
+  const oldResponse = page.waitForResponse('http://127.0.0.1:8787/admin/tournaments/A/teams')
+  releaseOldTeams()
+  await (await oldResponse).finished()
+  await page.evaluate(() => new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+  }))
+  await expect(page.getByRole('button', { name: /チーム・保存済 表示順/ })).toBeVisible()
+  await expect(page.getByText('古いチーム', { exact: true })).toHaveCount(0)
+})

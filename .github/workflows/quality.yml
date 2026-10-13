@@ -38,5 +38,11 @@ jobs:
       - name: Build web
         run: bun run --filter web build
 
+      - name: Lint admin
+        run: bun run --filter admin lint
+
+      - name: Build admin
+        run: bun run --filter admin build
+
       - name: Spellcheck
         run: bun run spellcheck

@@ -11,6 +11,8 @@ coverage
 *.lcov
 /apps/web/playwright-report/
 /apps/web/test-results/
+/apps/admin/playwright-report/
+/apps/admin/test-results/
 
 # logs
 logs

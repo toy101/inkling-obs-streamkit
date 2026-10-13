@@ -5,22 +5,29 @@ import { Elysia, type ElysiaAdapter } from "elysia";
 import apiPackage from "../package.json" with { type: "json" };
 import type { DataSource } from "./create-data-source";
 import { models } from "./models";
+import { createAdminRoutes, type AdminAppOptions } from "./admin";
 
-type CreateAppOptions = {
+export type CreateAppOptions = {
   dataSource: DataSource;
   webOrigins: string[];
+  admin?: AdminAppOptions;
   adapter?: ElysiaAdapter;
 };
 
-export function createApp({ dataSource, webOrigins, adapter }: CreateAppOptions) {
+export function createApp({ dataSource, webOrigins, admin, adapter }: CreateAppOptions) {
+  const corsOrigins = Array.from(new Set([
+    ...webOrigins,
+    ...(admin?.origins ?? []),
+  ]));
   return new Elysia(adapter ? { adapter } : {})
     .use(
       cors({
         credentials: false,
-        methods: ["GET"],
-        origin: webOrigins,
+        methods: ["GET", "POST", "PUT", "OPTIONS"],
+        origin: corsOrigins,
       }),
     )
+    .use(createAdminRoutes(admin))
     .use(models)
     .use(
       openapi({

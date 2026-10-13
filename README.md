@@ -54,6 +54,34 @@ One Vite app switches views by the `view` query parameter. There is no router.
 
 Opening the site without `view` just prints the accepted values.
 
+## Admin app
+
+`apps/admin` is a local management app for creating and updating tournaments, tournament teams, and participants. Edit tournament names and statuses, team order, up to four roster names and linked participants, and participant icons, positions, and up to four weapons. Roster entries can have a registered name without a linked participant. Draft teams may have fewer than four members; locking a roster and displaying it in the Overlay require four.
+
+1. Run `cp apps/admin/.env.example apps/admin/.env.local`.
+2. Set a sufficiently long random `ADMIN_API_TOKEN` in `apps/api/.env.local` (for example, generate one with `bun -e 'console.log(crypto.randomUUID())'`).
+3. Run `bun run dev:admin:local` to start the local D1 API Worker, Web, and Admin.
+4. Open `http://127.0.0.1:5174`, select local D1, and connect with the same admin token.
+
+```bash
+bun run dev:admin:local       # Local D1: API :8787 / Web :5173 / Admin :5174
+bun run dev:admin:production  # Production D1: local Bun API :3000 / Web :5173 / Admin :5174
+```
+
+For production D1, configure `CLOUDFLARE_ACCOUNT_ID`, `D1_DATABASE_ID`, and a `CLOUDFLARE_API_TOKEN` with D1 Read and Write permissions in the API's `.env.local`, then run `dev:admin:production`. This uses the D1 HTTP API from the local API process. Neither the management UI nor the management API needs deployment to Cloudflare. This command does not run migrations or import development data automatically.
+
+Admin uses `VITE_LOCAL_API_URL` and `VITE_PRODUCTION_API_URL` for its endpoints. Selecting an environment does not start its API process; start the corresponding API first. The UI compares the selection with `/admin/status` and allows saves only after the environment matches. Switching environments clears credentials, loaded data, and edits.
+
+The admin token stays in browser memory; Cloudflare credentials stay in the API process. Never put tokens in `VITE_` variables. The API checks Bearer authentication and `ADMIN_ALLOWED_ORIGINS`, and rejects management operations when no token is configured or JSON mode is active. A public API Worker also rejects management operations unless explicitly configured with an admin token.
+
+Saved data goes into the same D1 tables used by the existing Web API and Overlay. Reload an already open Dock / Overlay page to fetch updated data. Existing `bun dev`, `dev:json`, and `dev:d1` commands still start only Web and API.
+
+```bash
+bun run --filter admin lint
+bun run --filter admin build
+bun run --filter admin test:e2e
+```
+
 ## OBS setup
 
 | Use | URL | Size |
@@ -81,6 +109,7 @@ Keep Chrome's page zoom at 100% when comparing the preview against OBS, and do n
 .
 ├── apps/
 │   ├── web/    Vite + React + TypeScript. Dock / Overlay / Debug.
+│   ├── admin/  Local tournament, team, and participant management UI.
 │   └── api/    Elysia on Bun or a Worker. JSON locally, D1 for Worker, migrations and seed data.
 ├── packages/   reserved for shared domain types (empty for now)
 └── cspell.json
@@ -93,7 +122,7 @@ Keep Chrome's page zoom at 100% when comparing the preview against OBS, and do n
 | `bun dev` | Runs the web app and API in parallel. |
 | `bun run dev:apps` | Runs the web app and API in parallel. |
 | `bun run --filter web dev` | Runs one workspace alone (`api` works the same way). |
-| `bun run --filter web lint` | ESLint. Only the web app has a lint setup. |
+| `bun run --filter web lint` | Web ESLint; use `--filter admin lint` for Admin. |
 | `bun run --filter web build` | `tsc -b && vite build`. The only type-check path. |
 | `bun run dev:json` | Starts the Bun API and Web with JSON data. |
 | `bun run dev:d1` | Prepares local D1, then starts the API Worker and Web. |
@@ -119,7 +148,7 @@ bun run --filter web test:e2e -- --update-snapshots
 
 Inspect the changed PNG files under `apps/web/e2e/visual-regression.spec.ts-snapshots/` before committing them. Baselines are intentionally managed for the `chromium-linux` project (`*-chromium-linux.png`), matching the Ubuntu Chromium environment in GitHub Actions. Baseline generation on macOS or Windows is not canonical; use the same Linux Chromium environment and do not commit platform-specific files generated on another OS. The `web-smoke` pull request workflow uploads actual screenshots, diffs and traces from `apps/web/test-results/` together with the tracked expected baselines when a test fails. These browser checks do not claim pixel-perfect equivalence with OBS CEF; that remains a separate manual gate.
 
-Pull requests run the `quality` check on a clean checkout. It uses Bun 1.4.2, installs with the frozen lockfile, prepares deterministic fixtures inside the ignored runtime paths, and runs the API type check, web lint, web build and spellcheck. The tracked TypeScript adapters and schema SQL make this check independent of `.env.local`, the local database, the CDN and the Ikaclo API.
+Pull requests run the `quality` check on a clean checkout. It uses Bun 1.4.2, installs with the frozen lockfile, prepares deterministic fixtures inside the ignored runtime paths, and runs the API type check, Web and Admin lint/build, and spellcheck. `admin-smoke` verifies management create/update flows and environment checks using a mock API. The tracked TypeScript adapters and schema SQL make these checks independent of `.env.local`, the local database, the CDN and the Ikaclo API.
 
 ## API reference
 

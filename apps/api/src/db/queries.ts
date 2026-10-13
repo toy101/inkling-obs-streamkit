@@ -13,6 +13,7 @@ import type { StorageDataSource } from "../create-data-source";
 
 export type QueryDatabase = {
   execute(statement: string | Statement): Promise<{ rows: Row[] }>;
+  batch(statements: readonly (string | Statement)[]): Promise<void>;
 };
 
 type WeaponCatalog = {
