@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 
 import { expect, installApiMock, test } from "./test";
+import { fixtureData } from "./fixture-data";
 
 const expectedSelection = {
   tournamentId: "tournament-a",
@@ -344,6 +345,58 @@ test("別ページのOverlayも反映した対戦へ更新する", async ({
     await expect(activeOverlaySlide.getByText("Bravo One")).toBeVisible();
     await waitForRenderCycle(overlayPage);
     expect(overlayApi.requestCount("/overlay/matchup")).toBe(1);
+  } finally {
+    overlayApi.assertNoBrowserErrors();
+    await overlayPage.close();
+  }
+});
+
+
+test("Dockは非表示・ドラフトの保存状態を解除しOverlayにも通知する", async ({ page }) => {
+  const fixtures = structuredClone(fixtureData);
+  fixtures.tournamentTeams["tournament-a"].unshift(
+    { id: "team-hidden", tournamentId: "tournament-a", name: "Hidden Team", displayOrder: 1, status: "hidden" },
+    { id: "team-draft", tournamentId: "tournament-a", name: "Draft Team", displayOrder: 2, status: "draft" },
+  );
+  const customApi = await installApiMock(page, { fixtures });
+  const overlayPage = await page.context().newPage();
+  const overlayApi = await installApiMock(overlayPage);
+  await overlayPage.addInitScript((selection) => {
+    localStorage.setItem("inkling:overlay-selection", JSON.stringify(selection));
+  }, expectedSelection);
+  try {
+    await overlayPage.goto("/?view=overlay");
+    await expect(overlayPage.locator(".overlay-matchup")).toBeVisible();
+    await page.addInitScript(() => {
+      localStorage.setItem("inkling:overlay-selection", JSON.stringify({
+        tournamentId: "tournament-a", alphaTournamentTeamId: "team-hidden", bravoTournamentTeamId: "team-draft",
+        ruleId: "rule-1", stageId: "stage-1", accentColor: "#123456", matchLabel: "",
+      }));
+    });
+    await page.goto("/?view=dock");
+    const dock = page.locator("main.dock");
+    await expect(dock.getByLabel("ALPHA")).toHaveValue("team-alpha");
+    await expect(dock.getByLabel("BRAVO")).toHaveValue("team-bravo");
+    for (const side of ["ALPHA", "BRAVO"]) {
+      await expect(dock.getByLabel(side).locator('option[value="team-hidden"]')).toHaveCount(0);
+      await expect(dock.getByLabel(side).locator('option[value="team-draft"]')).toHaveCount(0);
+    }
+    await expect(dock.getByLabel("対戦名")).toBeDisabled();
+    await expect(dock.getByLabel("accent-control-hue")).toBeDisabled();
+    await expect(dock.getByRole("button", { name: "色を反映", exact: true })).toBeDisabled();
+    await expect(dock.getByRole("button", { name: "確定・動画再生", exact: true })).toBeDisabled();
+    expect(await readStoredSelection(page)).toBeNull();
+    await expect(overlayPage.locator(".overlay-matchup")).toHaveCount(0);
+
+    const applyMatchup = dock.getByRole("button", { name: "対戦を反映", exact: true });
+    await expect(applyMatchup).toBeEnabled();
+    await applyMatchup.click();
+    expect(await readStoredSelection(page)).toMatchObject({
+      alphaTournamentTeamId: "team-alpha", bravoTournamentTeamId: "team-bravo",
+    });
+    await expect(dock.getByLabel("対戦名")).toBeEnabled();
+    await expect(overlayPage.locator(".overlay-matchup")).toBeVisible();
+    customApi.assertNoBrowserErrors();
   } finally {
     overlayApi.assertNoBrowserErrors();
     await overlayPage.close();

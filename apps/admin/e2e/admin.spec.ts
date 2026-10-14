@@ -5,15 +5,13 @@ interface MockState {
   failNextPlayerSave: boolean
   failNextTournamentList?: boolean
   failTournamentRefreshAfterCreate?: boolean
-  statusRequested?: () => void
-  statusWait?: Promise<void>
   teamSaveRequested?: () => void
   teamSaveWait?: Promise<void>
   teamsResponse?: (tournamentId: string) => Promise<MockState['teams']>
   teamPutBodies?: Array<{
     name: string
     displayOrder: number
-    rosterLocked: boolean
+    status: 'draft' | 'confirmed' | 'hidden'
     roster: Array<{ id: string | null; registeredName: string; playerId: string | null }>
   }>
   players: Array<{
@@ -36,7 +34,7 @@ interface MockState {
     tournamentId: string
     name: string
     displayOrder: number
-    rosterLockedAt: string | null
+    status: 'draft' | 'confirmed' | 'hidden'
     roster: Array<{
       id: string
       tournamentTeamId: string
@@ -49,6 +47,14 @@ interface MockState {
 
 const positions = [{ id: 'front', name: '前衛' }, { id: 'back', name: '後衛' }]
 const weapons = [{ id: 'w1', name: 'スプラシューター' }, { id: 'w2', name: 'スプラチャージャー' }]
+
+function normalizedTeamStatus(
+  requested: MockState['teams'][number]['status'],
+  rosterLength: number,
+): MockState['teams'][number]['status'] {
+  if (requested === 'hidden') return 'hidden'
+  return rosterLength === 4 ? 'confirmed' : 'draft'
+}
 
 function json(route: Route, body: unknown, status = 200) {
   return route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) })
@@ -66,8 +72,6 @@ async function mockApi(page: Page, state: MockState, apiPort = 8787) {
     }
     if (path === '/weapons') return json(route, weapons)
     if (path === '/admin/status') {
-      state.statusRequested?.()
-      await state.statusWait
       return json(route, { environment: state.environment })
     }
     if (path === '/admin/positions') return json(route, positions)
@@ -119,9 +123,9 @@ async function mockApi(page: Page, state: MockState, apiPort = 8787) {
       return json(route, teams)
     }
     if (teamsMatch && method === 'POST') {
-      const body = request.postDataJSON() as { name: string; displayOrder: number; rosterLocked: boolean; roster: Array<{ id: string | null; registeredName: string; playerId: string | null }> }
+      const body = request.postDataJSON() as NonNullable<MockState['teamPutBodies']>[number]
       const teamId = `team-${state.teams.length + 1}`
-      const team = { id: teamId, tournamentId: teamsMatch[1], name: body.name, displayOrder: body.displayOrder, rosterLockedAt: body.rosterLocked ? '2026-10-13T00:00:00.000Z' : null, roster: body.roster.map((entry, index) => ({ id: entry.id ?? `${teamId}-roster-${index + 1}`, tournamentTeamId: teamId, registeredName: entry.registeredName, displayOrder: index + 1, playerId: entry.playerId })) }
+      const team = { id: teamId, tournamentId: teamsMatch[1], name: body.name, displayOrder: body.displayOrder, status: normalizedTeamStatus(body.status, body.roster.length), roster: body.roster.map((entry, index) => ({ id: entry.id ?? `${teamId}-roster-${index + 1}`, tournamentTeamId: teamId, registeredName: entry.registeredName, displayOrder: index + 1, playerId: entry.playerId })) }
       state.teams.push(team)
       return json(route, team, 201)
     }
@@ -137,7 +141,7 @@ async function mockApi(page: Page, state: MockState, apiPort = 8787) {
         ...current,
         name: body.name,
         displayOrder: body.displayOrder,
-        rosterLockedAt: body.rosterLocked ? '2026-10-13T00:00:00.000Z' : null,
+        status: normalizedTeamStatus(body.status, body.roster.length),
         roster: body.roster.map((entry, rosterIndex) => ({
           id: entry.id ?? `${current.id}-roster-${rosterIndex + 1}`,
           tournamentTeamId: current.id,
@@ -196,24 +200,50 @@ test('保存失敗をフォーム内に表示し、重複ブキを選べない',
   await expect(page.getByRole('alert')).toContainText('同名の参加者が登録されています。')
 })
 
-test('環境不一致を拒否し、接続先切替で資格情報と編集状態を破棄する', async ({ page }) => {
-  const localState: MockState = { environment: 'production', failNextPlayerSave: false, players: [], tournaments: [], teams: [] }
-  const productionState: MockState = { environment: 'production', failNextPlayerSave: false, players: [], tournaments: [], teams: [] }
-  await mockApi(page, localState)
-  await mockApi(page, productionState, 3000)
+test('起動時のローカル接続先を表示し、APIの環境不一致を拒否する', async ({ page }) => {
+  const state: MockState = { environment: 'production', failNextPlayerSave: false, players: [], tournaments: [], teams: [] }
+  await mockApi(page, state)
   await page.goto('/')
+  await expect(page.locator('.environment-badge')).toHaveText('ローカル D1')
+  await expect(page.locator('.api-url code')).toHaveText('http://127.0.0.1:8787')
+  await expect(page.getByRole('button', { name: 'ローカル D1', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '本番環境 D1', exact: true })).toHaveCount(0)
   await page.getByLabel('管理トークン').fill('secret')
   await page.getByRole('button', { name: '接続する' }).click()
-  await expect(page.getByRole('alert')).toContainText('接続先の環境が一致しません')
-
-  await page.getByRole('button', { name: '本番環境 D1' }).click()
-  await expect(page.getByLabel('管理トークン')).toHaveValue('')
-  await expect(page.getByText('本番データへ接続します')).toBeVisible()
-  await page.getByLabel('管理トークン').fill('secret')
-  await page.getByRole('button', { name: '接続する' }).click()
-  await expect(page.getByText('接続済み')).toBeVisible()
-  await expect(page.getByText('本番環境 D1 に接続中')).toBeVisible()
+  await expect(page.getByRole('alert')).toContainText('接続先の環境が一致しません。起動設定: local / API: production')
+  await expect(page.getByText('接続済み', { exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '大会を作成' })).toHaveCount(0)
 })
+
+test('本番指定で起動すると本番接続先を維持して登録できる', async ({ page }) => {
+  const state: MockState = { environment: 'production', failNextPlayerSave: false, players: [], tournaments: [], teams: [] }
+  const unexpectedRequests: string[] = []
+  await mockApi(page, state, 3000)
+  await page.route('http://127.0.0.1:8787/**', async (route) => {
+    unexpectedRequests.push(route.request().url())
+    await route.abort()
+  })
+  await page.goto('http://127.0.0.1:5176/')
+  await expect(page.locator('.environment-badge')).toHaveText('本番環境 D1')
+  await expect(page.locator('.api-url code')).toHaveText('http://127.0.0.1:3000')
+  await expect(page.getByRole('button', { name: 'ローカル D1', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '本番環境 D1', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('alert')).toContainText('本番データへ接続します')
+  await page.getByLabel('管理トークン').fill('secret')
+  await page.getByRole('button', { name: '接続する' }).click()
+  await expect(page.getByText('本番環境 D1 に接続中')).toBeVisible()
+  await page.getByLabel('大会名 必須').fill('本番接続の確認大会')
+  await page.getByRole('button', { name: '大会を作成' }).click()
+  await expect(page.getByText('大会を作成しました。')).toBeVisible()
+  expect(state.tournaments.map((tournament) => tournament.name)).toEqual(['本番接続の確認大会'])
+  expect(unexpectedRequests).toEqual([])
+
+  await page.reload()
+  await expect(page.locator('.environment-badge')).toHaveText('本番環境 D1')
+  await expect(page.getByLabel('管理トークン')).toHaveValue('')
+  await expect(page.getByText('接続済み', { exact: true })).toHaveCount(0)
+})
+
 
 test('チームの同一参加者を複数枠へ割り当てられない', async ({ page }) => {
   const state: MockState = {
@@ -229,11 +259,11 @@ test('チームの同一参加者を複数枠へ割り当てられない', async
   await page.getByRole('button', { name: '参加枠を追加' }).click()
   await page.getByLabel('参加者 1 紐付け').selectOption('p1')
   await expect(page.getByLabel('参加者 2 紐付け').locator('option[value="p1"]')).toHaveAttribute('disabled', '')
-  await expect(page.locator('.roster-fieldset legend')).toContainText('2/4')
-  await expect(page.locator('.roster-fieldset legend')).toContainText('未完成のまま保存できます')
+  await expect(page.locator('.roster-fieldset legend')).toContainText('1/4人登録済み')
+  await expect(page.getByLabel('チームの状態')).toHaveValue('draft')
 })
 
-test('大会と4人チームを作成・更新し、再接続後も保存内容とロスターIDを維持する', async ({ page }) => {
+test('チームの人数と非表示操作から状態を保存し、再接続後もロスターIDを維持する', async ({ page }) => {
   const teamPutBodies: NonNullable<MockState['teamPutBodies']> = []
   const state: MockState = {
     environment: 'local',
@@ -253,86 +283,86 @@ test('大会と4人チームを作成・更新し、再接続後も保存内容�
   await connect(page)
 
   await page.getByLabel('大会名 必須').fill('ツクヨミ杯')
-  await page.getByLabel('状態').selectOption('registration')
+  await page.getByLabel('大会の状態').selectOption('registration')
   await page.getByRole('button', { name: '大会を作成' }).click()
   await expect(page.getByText('大会を作成しました。')).toBeVisible()
 
   await page.getByLabel('大会名 必須').fill('ツクヨミ杯 Final')
-  await page.getByLabel('状態').selectOption('locked')
+  await page.getByLabel('大会の状態').selectOption('locked')
   await page.getByRole('button', { name: '大会を更新' }).click()
   await expect(page.getByText('大会を更新しました。')).toBeVisible()
 
   await page.getByRole('button', { name: '参加者', exact: true }).click()
   await page.getByRole('button', { name: '大会・チーム', exact: true }).click()
   await expect(page.getByLabel('大会名 必須')).toHaveValue('ツクヨミ杯 Final')
-  await expect(page.getByLabel('状態')).toHaveValue('locked')
+  await expect(page.getByLabel('大会の状態')).toHaveValue('locked')
 
   await page.getByLabel('チーム名 必須').fill('月影')
   await page.getByLabel('表示順').fill('2')
-  await page.getByLabel('ロスターを確定').check()
-  for (let index = 1; index <= 4; index += 1) {
+  for (let index = 1; index <= 3; index += 1) {
     if (index > 1) await page.getByRole('button', { name: '参加枠を追加' }).click()
     await page.getByLabel(`参加者 ${index} 登録名`).fill(`登録名 ${index}`)
     await page.getByLabel(`参加者 ${index} 紐付け`).selectOption(`p${index}`)
   }
+  await expect(page.getByLabel('チームの状態')).toHaveValue('draft')
   await page.getByRole('button', { name: 'チームを登録' }).click()
   await expect(page.getByText('チームを登録しました。')).toBeVisible()
-  await expect(page.getByRole('button', { name: /月影.*4\/4 登録済み/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /月影.*ドラフト.*3\/4人/ })).toBeVisible()
 
-  const createdRosterIds = state.teams[0].roster.map((entry) => entry.id)
+  const firstThreeRosterIds = state.teams[0].roster.map((entry) => entry.id)
+  await page.getByRole('button', { name: '参加枠を追加' }).click()
+  await page.getByLabel('参加者 4 登録名').fill('登録名 4')
+  await page.getByLabel('参加者 4 紐付け').selectOption('p4')
+  await expect(page.getByLabel('チームの状態')).toHaveValue('confirmed')
+  await page.getByRole('button', { name: 'チームを更新' }).click()
+  await expect(page.getByRole('button', { name: /月影.*確定.*4\/4人/ })).toBeVisible()
+
+  await page.getByLabel('チームの状態').selectOption('hidden')
+  await page.getByRole('button', { name: 'チームを更新' }).click()
+  await expect(page.getByRole('button', { name: /月影.*非表示.*4\/4人/ })).toBeVisible()
+  await page.getByLabel('参加者 1 登録名').fill('非表示のまま編集')
+  await expect(page.getByLabel('チームの状態')).toHaveValue('hidden')
+
+  await page.getByLabel('チームの状態').selectOption('confirmed')
+  await page.getByRole('button', { name: 'チームを更新' }).click()
+  await expect(page.getByRole('button', { name: /月影.*確定.*4\/4人/ })).toBeVisible()
+
+  await page.getByRole('button', { name: '参加者 4 を削除' }).click()
+  await expect(page.getByLabel('チームの状態')).toHaveValue('draft')
   await page.getByLabel('チーム名 必須').fill('月影・改')
   await page.getByLabel('表示順').fill('4')
   await page.getByRole('button', { name: 'チームを更新' }).click()
   await expect(page.getByText('チームを更新しました。')).toBeVisible()
-  expect(teamPutBodies).toHaveLength(1)
-  expect(teamPutBodies[0].roster.map((entry) => entry.id)).toEqual(createdRosterIds)
-  expect(teamPutBodies[0]).toMatchObject({ name: '月影・改', displayOrder: 4, rosterLocked: true })
+  await expect(page.getByRole('button', { name: /月影・改.*ドラフト.*3\/4人/ })).toBeVisible()
+  expect(teamPutBodies).toHaveLength(4)
+  expect(teamPutBodies.map((body) => body.status)).toEqual(['confirmed', 'hidden', 'confirmed', 'draft'])
+  expect(teamPutBodies[3].roster.map((entry) => entry.id)).toEqual(firstThreeRosterIds)
+  expect(teamPutBodies[3]).toMatchObject({ name: '月影・改', displayOrder: 4, status: 'draft' })
 
   await page.getByRole('button', { name: '切断' }).click()
   await page.getByLabel('管理トークン').fill('secret')
   await page.getByRole('button', { name: '接続する' }).click()
   await page.getByRole('button', { name: /ツクヨミ杯 Final/ }).click()
-  await expect(page.getByRole('button', { name: /月影・改.*4\/4 登録済み/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /月影・改.*ドラフト.*3\/4人/ })).toBeVisible()
 })
 
-test('接続応答待ちで環境を切り替えても古い環境のデータを復元しない', async ({ page }) => {
-  let releaseStatus = () => {}
-  const statusWait = new Promise<void>((resolve) => { releaseStatus = resolve })
-  let signalStatusRequested = () => {}
-  const statusRequested = new Promise<void>((resolve) => { signalStatusRequested = resolve })
-  const localState: MockState = {
-    environment: 'local',
-    failNextPlayerSave: false,
-    statusRequested: signalStatusRequested,
-    statusWait,
-    players: [{ id: 'local-player', displayName: '遅延ローカル参加者', iconUrl: null, position: null, weaponIds: [] }],
-    tournaments: [],
-    teams: [],
-  }
-  const productionState: MockState = {
-    environment: 'production',
-    failNextPlayerSave: false,
-    players: [{ id: 'production-player', displayName: '本番参加者', iconUrl: null, position: null, weaponIds: [] }],
-    tournaments: [],
-    teams: [],
-  }
-  await mockApi(page, localState)
-  await mockApi(page, productionState, 3000)
-  await page.goto('/')
+test('切断時に資格情報と編集内容を破棄し、起動時の接続先を維持する', async ({ page }) => {
+  const state: MockState = { environment: 'local', failNextPlayerSave: false, players: [], tournaments: [], teams: [] }
+  await mockApi(page, state)
+  await connect(page)
+  await page.getByLabel('大会名 必須').fill('未保存の大会')
+  await page.getByRole('button', { name: '切断', exact: true }).click()
+  await expect(page.getByLabel('管理トークン')).toHaveValue('')
+  await expect(page.getByRole('button', { name: '大会を作成' })).toHaveCount(0)
+  await expect(page.locator('.environment-badge')).toHaveText('ローカル D1')
+
   await page.getByLabel('管理トークン').fill('secret')
   await page.getByRole('button', { name: '接続する' }).click()
-  await statusRequested
-
-  await page.getByRole('button', { name: '本番環境 D1' }).click()
-  await page.getByLabel('管理トークン').fill('secret')
-  await page.getByRole('button', { name: '接続する' }).click()
-  await expect(page.getByText('接続済み')).toBeVisible()
-  releaseStatus()
-
-  await page.getByRole('button', { name: '参加者', exact: true }).click()
-  await expect(page.getByRole('button', { name: /本番参加者/ })).toBeVisible()
-  await expect(page.getByText('遅延ローカル参加者')).toHaveCount(0)
+  await expect(page.getByText('ローカル D1 に接続中')).toBeVisible()
+  await expect(page.getByLabel('大会名 必須')).toHaveValue('')
+  expect(state.tournaments).toEqual([])
 })
+
 
 test('大会保存後の一覧再取得が失敗しても保存済み応答を保持し、重複作成しない', async ({ page }) => {
   const state: MockState = {
@@ -372,7 +402,7 @@ test('チームの保存中は大会・チーム・編集画面の切替を防�
     })),
     teams: ['1', '2'].map((number) => ({
       id: `team${number}`, tournamentId: 'A', name: `チーム${number}`,
-      displayOrder: Number(number), rosterLockedAt: null, roster: [],
+      displayOrder: Number(number), status: 'draft' as const, roster: [],
     })),
   }
   await mockApi(page, state)
@@ -411,7 +441,7 @@ test('大会を往復して保存した後も古いチーム一覧の遅延応�
       id: letter, organizerUserId: 'admin', name: `大会${letter}`, status: 'draft',
       createdAt: '2026-10-13T00:00:00.000Z', updatedAt: '2026-10-13T00:00:00.000Z',
     })),
-    teams: [{ id: 'team1', tournamentId: 'A', name: '新しいチーム', displayOrder: 1, rosterLockedAt: null, roster: [] }],
+    teams: [{ id: 'team1', tournamentId: 'A', name: '新しいチーム', displayOrder: 1, status: 'draft', roster: [] }],
   }
   state.teamsResponse = async (tournamentId) => {
     const teams = structuredClone(state.teams.filter((team) => team.tournamentId === tournamentId))
@@ -444,4 +474,56 @@ test('大会を往復して保存した後も古いチーム一覧の遅延応�
   }))
   await expect(page.getByRole('button', { name: /チーム・保存済 表示順/ })).toBeVisible()
   await expect(page.getByText('古いチーム', { exact: true })).toHaveCount(0)
+})
+
+
+test('参加者の紐付けで空の登録名を補完し、入力済みの名前を保持して保存する', async ({ page }) => {
+  const state: MockState = {
+    environment: 'local', failNextPlayerSave: false,
+    players: Array.from({ length: 4 }, (_, index) => ({
+      id: `p${index + 1}`, displayName: `Player ${index + 1}`, iconUrl: null, position: null, weaponIds: [],
+    })),
+    tournaments: [{ id: 't1', organizerUserId: 'admin', name: '名前補完テスト大会', status: 'draft', createdAt: '2026-10-14T00:00:00.000Z', updatedAt: '2026-10-14T00:00:00.000Z' }],
+    teams: [],
+  }
+  await mockApi(page, state)
+  await connect(page)
+  await page.getByRole('button', { name: /名前補完テスト大会/ }).click()
+  await page.getByLabel('チーム名 必須').fill('名前補完チーム')
+
+  await page.getByLabel('参加者 1 紐付け').selectOption('p1')
+  await expect(page.getByLabel('参加者 1 登録名')).toHaveValue('Player 1')
+  await page.getByLabel('参加者 1 紐付け').selectOption('p2')
+  await expect(page.getByLabel('参加者 1 登録名')).toHaveValue('Player 1')
+
+  await page.getByRole('button', { name: '参加枠を追加' }).click()
+  await page.getByLabel('参加者 2 登録名').fill('大会用の名前')
+  await page.getByLabel('参加者 2 紐付け').selectOption('p1')
+  await expect(page.getByLabel('参加者 2 登録名')).toHaveValue('大会用の名前')
+
+  await page.getByRole('button', { name: '参加枠を追加' }).click()
+  await page.getByLabel('参加者 3 登録名').fill('   ')
+  await page.getByLabel('参加者 3 紐付け').selectOption('p3')
+  await expect(page.getByLabel('参加者 3 登録名')).toHaveValue('Player 3')
+
+  await page.getByRole('button', { name: '参加枠を追加' }).click()
+  await page.getByLabel('参加者 4 紐付け').selectOption('p4')
+  await expect(page.getByLabel('参加者 4 登録名')).toHaveValue('Player 4')
+  await page.getByLabel('参加者 4 紐付け').selectOption('')
+  await expect(page.getByLabel('参加者 4 登録名')).toHaveValue('Player 4')
+  await page.getByLabel('参加者 4 紐付け').selectOption('p4')
+  await expect(page.getByLabel('チームの状態')).toHaveValue('confirmed')
+  await page.getByRole('button', { name: 'チームを登録' }).click()
+  await expect(page.getByText('チームを登録しました。')).toBeVisible()
+  expect(state.teams[0].roster.map((entry) => entry.registeredName)).toEqual(['Player 1', '大会用の名前', 'Player 3', 'Player 4'])
+  expect(state.teams[0].roster.map((entry) => entry.playerId)).toEqual(['p2', 'p1', 'p3', 'p4'])
+
+  await page.getByRole('button', { name: '切断' }).click()
+  await page.getByLabel('管理トークン').fill('secret')
+  await page.getByRole('button', { name: '接続する' }).click()
+  await page.getByRole('button', { name: /名前補完テスト大会/ }).click()
+  await page.getByRole('button', { name: /名前補完チーム.*確定/ }).click()
+  await expect(page.getByLabel('参加者 1 登録名')).toHaveValue('Player 1')
+  await expect(page.getByLabel('参加者 2 登録名')).toHaveValue('大会用の名前')
+  await expect(page.getByLabel('参加者 1 紐付け')).toHaveValue('p2')
 })

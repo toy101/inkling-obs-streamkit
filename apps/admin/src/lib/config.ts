@@ -50,6 +50,6 @@ export const targetConfigs: Record<AdminTarget, TargetConfig> = {
   },
 }
 
-export function readInitialTarget(value: unknown): AdminTarget {
+export function readAdminTarget(value: unknown): AdminTarget {
   return value === 'production' ? 'production' : 'local'
 }

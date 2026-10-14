@@ -1,7 +1,12 @@
 import { t } from "elysia";
 
 import { IdSchema, NameSchema, TEAM_PLAYER_COUNT } from "./common";
-import { TournamentRosterEntrySchema, TournamentStatusSchema, TournamentTeamSchema } from "./tournament";
+import {
+  TournamentRosterEntrySchema,
+  TournamentStatusSchema,
+  TournamentTeamSchema,
+  TournamentTeamStatusSchema,
+} from "./tournament";
 
 export const AdminTournamentInputSchema = t.Object(
   {
@@ -26,7 +31,7 @@ export const AdminTeamInputSchema = t.Object(
   {
     name: NameSchema,
     displayOrder: t.Integer({ minimum: 1 }),
-    rosterLocked: t.Boolean(),
+    status: TournamentTeamStatusSchema,
     roster: t.Array(AdminRosterEntryInputSchema, { maxItems: TEAM_PLAYER_COUNT }),
   },
   { additionalProperties: false },

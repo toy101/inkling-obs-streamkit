@@ -19,7 +19,11 @@
     "db:migrate": "bun run --filter api db:migrate",
     "db:seed": "bun run --filter api db:seed",
     "db:setup": "bun run --filter api db:setup",
-    "db:setup:local": "bun run --filter api db:setup:local"
+    "db:setup:local": "bun run --filter api db:setup:local",
+    "cf:login": "bun run --filter api cf:login",
+    "cf:whoami": "bun run --filter api cf:whoami",
+    "db:check:production": "bun run --filter api db:check:production",
+    "db:migrate:production": "bun run --filter api db:migrate:production"
   },
   "devDependencies": {
     "@types/bun": "latest",

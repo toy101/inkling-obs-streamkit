@@ -30,13 +30,29 @@ export const TournamentSchema = t.Object(
 
 export type Tournament = typeof TournamentSchema.static;
 
+export const TournamentTeamStatusSchema = t.Union([
+  t.Literal("draft"),
+  t.Literal("confirmed"),
+  t.Literal("hidden"),
+]);
+
+export type TournamentTeamStatus = typeof TournamentTeamStatusSchema.static;
+
+export function normalizeTournamentTeamStatus(
+  requestedStatus: TournamentTeamStatus,
+  rosterCount: number,
+): TournamentTeamStatus {
+  if (requestedStatus === "hidden") return "hidden";
+  return rosterCount === TEAM_PLAYER_COUNT ? "confirmed" : "draft";
+}
+
 export const TournamentTeamSchema = t.Object(
   {
     id: IdSchema,
     tournamentId: IdSchema,
     name: NameSchema,
     displayOrder: t.Integer({ minimum: 1 }),
-    rosterLockedAt: t.Nullable(TimestampSchema),
+    status: TournamentTeamStatusSchema,
   },
   { additionalProperties: false },
 );
@@ -56,7 +72,7 @@ export const TournamentRosterEntrySchema = t.Object(
 
 export type TournamentRosterEntry = typeof TournamentRosterEntrySchema.static;
 
-// 下書きは0〜4人。確定時の4人検証・表示順と選手の重複・参照整合性はサービス/DB側で扱う。
+// 0〜4人の登録を許可する。チーム状態の正規化、表示順、選手の重複・参照整合性はサービス/DB側で扱う。
 export const TournamentRosterEntriesSchema = t.Array(
   TournamentRosterEntrySchema,
   { maxItems: TEAM_PLAYER_COUNT },

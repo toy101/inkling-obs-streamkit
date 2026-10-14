@@ -58,7 +58,9 @@ function createSqliteDatabase(): QueryDatabase & {
     CREATE TABLE tournament_teams (
       id TEXT PRIMARY KEY NOT NULL, tournament_id TEXT NOT NULL REFERENCES tournaments(id),
       name TEXT NOT NULL, display_order INTEGER NOT NULL CHECK (display_order >= 1),
-      roster_locked_at TEXT, UNIQUE (tournament_id, display_order)
+      roster_locked_at TEXT,
+      status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'confirmed', 'hidden')),
+      UNIQUE (tournament_id, display_order)
     );
     CREATE TABLE tournament_roster_entries (
       id TEXT PRIMARY KEY NOT NULL, tournament_team_id TEXT NOT NULL REFERENCES tournament_teams(id),
@@ -287,7 +289,7 @@ describe("admin API", () => {
 
     const teamPath = `/admin/tournaments/${createdTournament.id}/teams`;
     const teamInput: AdminTeamInput = {
-      name: "Created team", displayOrder: 1, rosterLocked: false,
+      name: "Created team", displayOrder: 1, status: "draft",
       roster: [{ id: null, registeredName: "Created roster", playerId: player.id }],
     };
     const createdTeam = await (await write(teamPath, "POST", teamInput)).json() as AdminTeam;
@@ -332,7 +334,7 @@ describe("admin API", () => {
     const firstInput: AdminTeamInput = {
       name: "Alpha",
       displayOrder: 1,
-      rosterLocked: true,
+      status: "confirmed",
       roster,
     };
     const firstResponse = await request(app, `/admin/tournaments/${tournament.id}/teams`, {
@@ -375,11 +377,18 @@ describe("admin API", () => {
       body: JSON.stringify({ ...firstInput, name: "Duplicate order" }),
     });
     expect(conflict.status).toBe(409);
-    const invalidLocked = await request(app, `/admin/tournaments/${tournament.id}/teams`, {
+    const incomplete = await request(app, `/admin/tournaments/${tournament.id}/teams`, {
       method: "POST",
-      body: JSON.stringify({ ...firstInput, displayOrder: 3, roster: roster.slice(0, 3) }),
+      body: JSON.stringify({
+        ...firstInput,
+        name: "Incomplete",
+        displayOrder: 3,
+        roster: roster.slice(0, 3),
+      }),
     });
-    expect(invalidLocked.status).toBe(422);
+    expect(incomplete.status).toBe(200);
+    const incompleteTeam = await incomplete.json() as AdminTeam;
+    expect(incompleteTeam.status).toBe("draft");
 
     const publicTournaments = await app.handle(new Request("http://api.test/tournaments"));
     expect(await publicTournaments.json()).toContainEqual(tournament);
@@ -398,6 +407,98 @@ describe("admin API", () => {
       alpha: { id: first.id, players: expect.any(Array) },
       bravo: { id: second.id, players: expect.any(Array) },
     });
+  });
+
+  test("normalizes team status and keeps hidden or incomplete teams out of public reads", async () => {
+    const app = makeApp(database);
+    const tournament = await (await request(app, "/admin/tournaments", {
+      method: "POST",
+      body: JSON.stringify({ name: "Status Tournament", status: "locked" }),
+    })).json() as Tournament;
+    const roster = Array.from({ length: 4 }, (_, index) => ({
+      id: null,
+      registeredName: `Member ${index + 1}`,
+      playerId: null,
+    }));
+    const teamPath = `/admin/tournaments/${tournament.id}/teams`;
+    const hidden = await (await request(app, teamPath, {
+      method: "POST",
+      body: JSON.stringify({
+        name: "Hidden team",
+        displayOrder: 1,
+        status: "hidden",
+        roster,
+      }),
+    })).json() as AdminTeam;
+    const visible = await (await request(app, teamPath, {
+      method: "POST",
+      body: JSON.stringify({
+        name: "Visible team",
+        displayOrder: 2,
+        status: "draft",
+        roster,
+      }),
+    })).json() as AdminTeam;
+    expect(hidden.status).toBe("hidden");
+    expect(visible.status).toBe("confirmed");
+
+    const adminTeams = await request(app, teamPath);
+    expect((await adminTeams.json() as AdminTeam[]).map((team) => team.status)).toEqual([
+      "hidden",
+      "confirmed",
+    ]);
+    const publicTeams = await app.handle(new Request(`http://api.test/tournaments/${tournament.id}/teams`));
+    expect(await publicTeams.json()).toEqual([
+      expect.objectContaining({ id: visible.id, status: "confirmed" }),
+    ]);
+    const hiddenOverlay = await app.handle(new Request(
+      `http://api.test/overlay/participants?tournamentId=${tournament.id}`
+      + `&alphaTournamentTeamId=${hidden.id}&bravoTournamentTeamId=${visible.id}`,
+    ));
+    expect(await hiddenOverlay.text()).toBe("");
+
+    const unhidden = await (await request(app, `${teamPath}/${hidden.id}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        name: hidden.name,
+        displayOrder: hidden.displayOrder,
+        status: "draft",
+        roster: hidden.roster.map((entry) => ({
+          id: entry.id,
+          registeredName: entry.registeredName,
+          playerId: entry.playerId,
+        })),
+      }),
+    })).json() as AdminTeam;
+    expect(unhidden.status).toBe("confirmed");
+
+    const incomplete = await (await request(app, `${teamPath}/${hidden.id}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        name: hidden.name,
+        displayOrder: hidden.displayOrder,
+        status: "confirmed",
+        roster: unhidden.roster.slice(0, 3).map((entry) => ({
+          id: entry.id,
+          registeredName: entry.registeredName,
+          playerId: entry.playerId,
+        })),
+      }),
+    })).json() as AdminTeam;
+    expect(incomplete.status).toBe("draft");
+
+    database.sqlite.query("UPDATE tournament_teams SET status = 'confirmed' WHERE id = ?").run(hidden.id);
+    const inconsistentPublicTeams = await app.handle(
+      new Request(`http://api.test/tournaments/${tournament.id}/teams`),
+    );
+    expect(await inconsistentPublicTeams.json()).toEqual([
+      expect.objectContaining({ id: visible.id }),
+    ]);
+    const inconsistentOverlay = await app.handle(new Request(
+      `http://api.test/overlay/participants?tournamentId=${tournament.id}`
+      + `&alphaTournamentTeamId=${hidden.id}&bravoTournamentTeamId=${visible.id}`,
+    ));
+    expect(await inconsistentOverlay.text()).toBe("");
   });
 
   test("preserves retained roster IDs and their auxiliary weapon rows", async () => {
@@ -422,7 +523,7 @@ describe("admin API", () => {
       body: JSON.stringify({
         name: "Team",
         displayOrder: 1,
-        rosterLocked: false,
+        status: "draft",
         roster: [
           { id: null, registeredName: "First old", playerId: firstPlayer.id },
           { id: null, registeredName: "Second old", playerId: secondPlayer.id },
@@ -443,7 +544,7 @@ describe("admin API", () => {
       body: JSON.stringify({
         name: "Renamed",
         displayOrder: 1,
-        rosterLocked: false,
+        status: "draft",
         roster: [
           { id: secondRosterId, registeredName: "Second new", playerId: secondPlayer.id },
           { id: firstRosterId, registeredName: "First new", playerId: firstPlayer.id },

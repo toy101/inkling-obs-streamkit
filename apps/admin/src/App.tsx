@@ -13,18 +13,18 @@ import {
   type Tournament,
   type Weapon,
 } from './lib/api'
-import { readInitialTarget, targetConfigs, type AdminTarget } from './lib/config'
+import { readAdminTarget, targetConfigs } from './lib/config'
+
+const config = targetConfigs[readAdminTarget(import.meta.env.VITE_ADMIN_TARGET)]
 
 type View = 'tournaments' | 'players'
 
 interface Session {
   api: AdminApi
   controller: AbortController
-  target: AdminTarget
 }
 
 export default function App() {
-  const [target, setTarget] = useState<AdminTarget>(() => readInitialTarget(import.meta.env.VITE_ADMIN_TARGET))
   const [token, setToken] = useState('')
   const [connecting, setConnecting] = useState(false)
   const [connectionError, setConnectionError] = useState('')
@@ -62,14 +62,6 @@ export default function App() {
     clearData()
   }
 
-  function changeTarget(nextTarget: AdminTarget) {
-    if (nextTarget === target) return
-    closeSession()
-    setTarget(nextTarget)
-    setToken('')
-    setConnectionError('')
-  }
-
   function disconnect() {
     closeSession()
     setToken('')
@@ -84,22 +76,21 @@ export default function App() {
     setConnectionError('')
     const controller = new AbortController()
     const nextSession: Session = {
-      api: new AdminApi(targetConfigs[target].apiUrl, normalizedToken, controller.signal),
+      api: new AdminApi(config.apiUrl, normalizedToken, controller.signal),
       controller,
-      target,
     }
     sessionRef.current = nextSession
 
     try {
       const status = await nextSession.api.status()
-      if (status.environment !== target) {
-        throw new Error(`接続先の環境が一致しません。選択: ${target} / API: ${status.environment}`)
+      if (status.environment !== config.id) {
+        throw new Error(`接続先の環境が一致しません。起動設定: ${config.id} / API: ${status.environment}`)
       }
       const [nextPlayers, nextPositions, nextTournaments, nextWeapons] = await Promise.all([
         nextSession.api.players(),
         nextSession.api.positions(),
         nextSession.api.tournaments(),
-        loadWeapons(targetConfigs[target].apiUrl, controller.signal),
+        loadWeapons(config.apiUrl, controller.signal),
       ])
       if (sessionRef.current !== nextSession) return
       setPlayers(nextPlayers)
@@ -193,17 +184,15 @@ export default function App() {
           <p className="eyebrow">INKLING.ADMIN</p>
           <h1>大会管理</h1>
         </div>
-        {session && <span className={`header-target ${session.target}`}>{targetConfigs[session.target].label} に接続中</span>}
+        {session && <span className={`header-target ${config.id}`}>{config.label} に接続中</span>}
       </header>
 
       <ConnectionPanel
-        target={target}
-        config={targetConfigs[target]}
+        config={config}
         token={token}
         connecting={connecting}
         connected={session !== null}
         error={connectionError}
-        onTargetChange={changeTarget}
         onTokenChange={setToken}
         onConnect={connect}
         onDisconnect={disconnect}
@@ -246,7 +235,7 @@ export default function App() {
       ) : (
         <main className="welcome-panel">
           <h2>大会データを管理</h2>
-          <p>接続先を選び、管理トークンを入力して接続してください。</p>
+          <p>管理トークンを入力して接続してください。</p>
         </main>
       )}
     </div>

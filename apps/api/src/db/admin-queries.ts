@@ -3,7 +3,12 @@ import type { Position } from "../models/catalog";
 import type { DisplayOrder } from "../models/common";
 import type { AdminTeam, AdminTeamInput } from "../models/admin";
 import type { PlayerInput, PlayerProfile } from "../models/player";
-import type { Tournament, TournamentStatus } from "../models/tournament";
+import {
+  normalizeTournamentTeamStatus,
+  type Tournament,
+  type TournamentStatus,
+  type TournamentTeamStatus,
+} from "../models/tournament";
 import type { Row, Statement } from "./client";
 
 type AdminDatabase = {
@@ -43,6 +48,18 @@ function tournamentStatus(row: Row): TournamentStatus {
       return status;
     default:
       throw new Error("Invalid tournament status in database.");
+  }
+}
+
+function tournamentTeamStatus(row: Row): TournamentTeamStatus {
+  const status = text(row, "team_status");
+  switch (status) {
+    case "draft":
+    case "confirmed":
+    case "hidden":
+      return status;
+    default:
+      throw new Error("Invalid tournament team status in database.");
   }
 }
 
@@ -123,9 +140,6 @@ function validatePlayerInput(
 }
 
 function validateTeamInput(input: AdminTeamInput): void {
-  if (input.rosterLocked && input.roster.length !== 4) {
-    throw new AdminDataError(422, "A locked roster must contain exactly four entries.");
-  }
   const rosterIds = input.roster.flatMap((entry) => entry.id === null ? [] : [entry.id]);
   if (duplicate(rosterIds) !== null) {
     throw new AdminDataError(422, "Roster entry IDs must be unique.");
@@ -214,7 +228,7 @@ export function createD1AdminDataSource(
     await requireRow(db, "tournaments", tournamentId);
     const { rows } = await db.execute({
       sql: `SELECT team.id, team.tournament_id, team.name, team.display_order,
-          team.roster_locked_at, roster.id AS roster_id, roster.registered_name,
+          team.status AS team_status, roster.id AS roster_id, roster.registered_name,
           roster.display_order AS roster_display_order, roster.player_id
         FROM tournament_teams team
         LEFT JOIN tournament_roster_entries roster ON roster.tournament_team_id = team.id
@@ -232,7 +246,7 @@ export function createD1AdminDataSource(
           tournamentId: text(row, "tournament_id"),
           name: text(row, "name"),
           displayOrder: integer(row, "display_order"),
-          rosterLockedAt: nullableText(row, "roster_locked_at"),
+          status: tournamentTeamStatus(row),
           roster: [],
         };
         teams.set(teamId, team);
@@ -337,7 +351,7 @@ export function createD1AdminDataSource(
     );
     await ensureTeamOrderAvailable(db, tournamentId, input.displayOrder, null);
     const teamId = crypto.randomUUID();
-    const now = new Date().toISOString();
+    const status = normalizeTournamentTeamStatus(input.status, input.roster.length);
     const roster = input.roster.map((entry, index) => ({
       ...entry,
       id: crypto.randomUUID(),
@@ -347,8 +361,8 @@ export function createD1AdminDataSource(
     await runBatch(db, [
       {
         sql: `INSERT INTO tournament_teams
-          (id, tournament_id, name, display_order, roster_locked_at) VALUES (?, ?, ?, ?, ?)`,
-        args: [teamId, tournamentId, input.name, input.displayOrder, input.rosterLocked ? now : null],
+          (id, tournament_id, name, display_order, status) VALUES (?, ?, ?, ?, ?)`,
+        args: [teamId, tournamentId, input.name, input.displayOrder, status],
       },
       ...roster.map((entry) => ({
         sql: `INSERT INTO tournament_roster_entries
@@ -357,7 +371,7 @@ export function createD1AdminDataSource(
         args: [entry.id, teamId, entry.registeredName, entry.displayOrder, entry.playerId],
       })),
     ]);
-    return { id: teamId, tournamentId, name: input.name, displayOrder: input.displayOrder, rosterLockedAt: input.rosterLocked ? now : null, roster };
+    return { id: teamId, tournamentId, name: input.name, displayOrder: input.displayOrder, status, roster };
   }
 
   async function updateTournamentTeam(
@@ -404,14 +418,14 @@ export function createD1AdminDataSource(
         ORDER BY roster_entry_id, display_order`,
       args: Array.from(retainedIds),
     })).rows;
-    const rosterLockedAt = input.rosterLocked ? current.rosterLockedAt ?? new Date().toISOString() : null;
+    const status = normalizeTournamentTeamStatus(input.status, input.roster.length);
     const statements: Statement[] = [{
       sql: `UPDATE tournament_teams
-        SET name = ?, display_order = ?, roster_locked_at = ? WHERE id = ? AND tournament_id = ?`,
+        SET name = ?, display_order = ?, status = ? WHERE id = ? AND tournament_id = ?`,
       args: [
         input.name,
         input.displayOrder,
-        rosterLockedAt,
+        status,
         teamId,
         tournamentId,
       ],
@@ -446,7 +460,7 @@ export function createD1AdminDataSource(
       ],
     })));
     await runBatch(db, statements);
-    return { ...current, name: input.name, displayOrder: input.displayOrder, rosterLockedAt, roster: resolvedRoster };
+    return { ...current, name: input.name, displayOrder: input.displayOrder, status, roster: resolvedRoster };
   }
 
   return {

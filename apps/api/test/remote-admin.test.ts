@@ -115,6 +115,52 @@ afterEach(() => {
 });
 
 describe.serial("remote D1 admin adapter", () => {
+  test("writes normalized team status through a parameterized HTTP batch", async () => {
+    const requests = installFetch((request) => {
+      const batch = request.body.batch;
+      if (Array.isArray(batch)) {
+        return success(batch.map(() => ({ success: true, results: [] })));
+      }
+      const query = request.body as { sql: string; params: string[] };
+      if (query.sql.includes("SELECT * FROM tournaments")) {
+        return success([{
+          success: true,
+          results: [{
+            id: "tournament-1",
+            organizer_user_id: "local-admin",
+            name: "Tournament",
+            status: "draft",
+            created_at: "2026-10-13T00:00:00.000Z",
+            updated_at: "2026-10-13T00:00:00.000Z",
+          }],
+        }]);
+      }
+      return success([{ success: true, results: [] }]);
+    });
+
+    const created = await adminDataSource().createTournamentTeam("tournament-1", {
+      name: "Remote hidden team",
+      displayOrder: 1,
+      status: "hidden",
+      roster: [],
+    });
+
+    expect(created.status).toBe("hidden");
+    const batchRequest = requests.find((request) => Array.isArray(request.body.batch));
+    const statements = batchRequest?.body.batch as Array<{
+      sql: string;
+      params: string[];
+    }>;
+    expect(statements[0]?.sql).toContain("(id, tournament_id, name, display_order, status)");
+    expect(statements[0]?.params).toEqual([
+      created.id,
+      "tournament-1",
+      "Remote hidden team",
+      "1",
+      "hidden",
+    ]);
+  });
+
   test("creates and updates a player through parameterized HTTP batches", async () => {
     let playerId = "";
     let displayName = "";

@@ -32,7 +32,8 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 *.tsbuildinfo
 /apps/api/.wrangler/
 /apps/web/.wrangler/
-/apps/api/.dev.vars
+/apps/api/.dev.vars*
+/apps/api/wrangler.production.toml
 
 # IntelliJ based IDEs
 .idea
@@ -48,7 +49,6 @@ agent_plan
 /apps/api/.data/
 /apps/api/src/data/*
 !/apps/api/src/data/.gitkeep
-/apps/api/src/db/migrations/
 
 # media
 *.webm

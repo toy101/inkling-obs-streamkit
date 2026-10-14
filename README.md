@@ -56,21 +56,32 @@ Opening the site without `view` just prints the accepted values.
 
 ## Admin app
 
-`apps/admin` is a local management app for creating and updating tournaments, tournament teams, and participants. Edit tournament names and statuses, team order, up to four roster names and linked participants, and participant icons, positions, and up to four weapons. Roster entries can have a registered name without a linked participant. Draft teams may have fewer than four members; locking a roster and displaying it in the Overlay require four.
+`apps/admin` is a local management app for creating and updating tournaments, tournament teams, and participants. Edit tournament names and statuses, team order, up to four roster names and linked participants, and participant icons, positions, and up to four weapons. Roster entries can have a registered name without a linked participant. Team status is automatically draft with fewer than four members and confirmed with four. Select hidden to retain the roster and participant data while excluding the team from Dock and Overlay. Restoring a hidden team recalculates its status from the roster size. Admin can edit every status; Dock and Overlay only display confirmed teams.
 
 1. Run `cp apps/admin/.env.example apps/admin/.env.local`.
 2. Set a sufficiently long random `ADMIN_API_TOKEN` in `apps/api/.env.local` (for example, generate one with `bun -e 'console.log(crypto.randomUUID())'`).
 3. Run `bun run dev:admin:local` to start the local D1 API Worker, Web, and Admin.
-4. Open `http://127.0.0.1:5174`, select local D1, and connect with the same admin token.
+4. Open `http://127.0.0.1:5174`, confirm that local D1 is displayed, and connect with the same admin token.
 
 ```bash
 bun run dev:admin:local       # Local D1: API :8787 / Web :5173 / Admin :5174
-bun run dev:admin:production  # Production D1: local Bun API :3000 / Web :5173 / Admin :5174
+bun run dev:admin:production  # Production D1: local API Worker :3000 / Web :5173 / Admin :5174
 ```
 
-For production D1, configure `CLOUDFLARE_ACCOUNT_ID`, `D1_DATABASE_ID`, and a `CLOUDFLARE_API_TOKEN` with D1 Read and Write permissions in the API's `.env.local`, then run `dev:admin:production`. This uses the D1 HTTP API from the local API process. Neither the management UI nor the management API needs deployment to Cloudflare. This command does not run migrations or import development data automatically.
+Apply the additional migrations to an existing D1 database before using team statuses. Local `dev:admin:local` applies them automatically at startup. For production, stop the API, run `bun run db:migrate:production`, then restart it. Migration 009 adds the status column and 010 derives existing statuses from roster counts. Tournaments, teams, participants, and rosters are preserved. The legacy `roster_locked_at` column remains for compatibility and is no longer used by the app. Legacy JSON data is also normalized using roster counts.
 
-Admin uses `VITE_LOCAL_API_URL` and `VITE_PRODUCTION_API_URL` for its endpoints. Selecting an environment does not start its API process; start the corresponding API first. The UI compares the selection with `/admin/status` and allows saves only after the environment matches. Switching environments clears credentials, loaded data, and edits.
+Production uses Wrangler OAuth and a D1 binding: Admin → local API Worker → production D1. This permits writes without deploying the API code to Cloudflare or manually creating a Cloudflare API token. Run these commands from the repository root.
+
+1. If legacy HTTP authentication or account settings exist, remove or comment out `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, API key/email, and their `CF_` aliases in `apps/api/.env.local`, and `unset` them in the shell before signing in. Run `bun install`, then `bun run cf:login` to sign in through the browser and `bun run cf:whoami` to confirm the account.
+2. On first setup, run `cp apps/api/wrangler.production.example.toml apps/api/wrangler.production.toml`. Replace `account_id` and the `database_name` and `database_id` under `env.production.d1_databases` with the production values. Keep `remote = true`. Leave the local-only `wrangler.local.toml` unchanged.
+3. Set `CATALOG_URL`, `IKACLO_API_ORIGIN`, and `ADMIN_API_TOKEN` in `apps/api/.env.local`. Reuse the catalog URL and image origin already configured for the app. The admin token is separate from Cloudflare authentication and is used to connect Admin. Remove legacy HTTP credentials such as `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, and their `CF_` aliases from `.env.local` and the shell environment. Production commands stop before connecting when these OAuth overrides remain configured.
+4. Run `bun run db:check:production` to inspect the database and migration history, then `bun run db:migrate:production` to apply pending migrations. The latter changes the production database.
+5. Run `bun run dev:admin:production`. It generates `apps/api/.dev.vars.production` and starts the local API Worker through Wrangler. Startup does not apply migrations or import development data.
+6. Open `http://127.0.0.1:5174`, confirm that production D1 is displayed, and connect with `ADMIN_API_TOKEN`. Register participants, a tournament, and its teams. A roster with four members becomes confirmed. Inspect the saved rows in the Cloudflare D1 Console as well.
+
+`db:migrate:production` records migration history in Wrangler's standard `d1_migrations` table. When legacy `schema_migrations` exists, it validates known applied filenames and transfers only the history metadata. Existing application tables without history or unknown migrations stop automatic application. The actual configuration and generated secrets remain outside Git.
+
+The connection target is fixed by `VITE_ADMIN_TARGET` at startup. `dev:admin:local` selects local D1 and `dev:admin:production` selects production D1; the UI displays the current environment and API URL. Configure the endpoints with `VITE_LOCAL_API_URL` and `VITE_PRODUCTION_API_URL`. Restart with the corresponding command to change environments. The UI compares the startup target with `/admin/status` and allows saves only after the environment matches. Disconnecting clears credentials, loaded data, and edits.
 
 The admin token stays in browser memory; Cloudflare credentials stay in the API process. Never put tokens in `VITE_` variables. The API checks Bearer authentication and `ADMIN_ALLOWED_ORIGINS`, and rejects management operations when no token is configured or JSON mode is active. A public API Worker also rejects management operations unless explicitly configured with an admin token.
 
@@ -128,7 +139,9 @@ Keep Chrome's page zoom at 100% when comparing the preview against OBS, and do n
 | `bun run dev:d1` | Prepares local D1, then starts the API Worker and Web. |
 | `bun run db:setup:local` | Applies pending migrations and initial data to local D1. |
 | `bun run openapi:build` | Generates the static Scalar viewer and `openapi.yaml` under `dist/openapi/` without starting the API or loading runtime data. |
-| `bun run db:migrate` | Applies pending SQL migrations to the configured D1 database. |
+| `bun run cf:login` / `bun run cf:whoami` | Sign in through Wrangler and inspect the Cloudflare account. |
+| `bun run db:check:production` | Read-only inspection of the production D1 target, tables, and migration history. |
+| `bun run db:migrate:production` / `bun run db:migrate` | Apply pending migrations through Wrangler to the configured production D1. |
 | `D1_SEED_DEVELOPMENT_DATA=1 bun run db:setup` | Applies migrations and inserts JSON development data once into the configured D1 database. |
 | `bun run spellcheck` | cspell across the repository. The dictionary lives in `cspell.json`. |
 
@@ -173,21 +186,21 @@ The default `API_DATA_SOURCE=json` mode reads these editable files directly:
 
 The Elysia routes and their response schemas stay the same in both modes. This keeps JSON editing fast while the model is unsettled and avoids coupling the web app to the storage choice.
 
-To use D1, create a database in Cloudflare, then set `API_DATA_SOURCE=d1`, `CLOUDFLARE_ACCOUNT_ID`, `D1_DATABASE_ID` and `CLOUDFLARE_API_TOKEN` in the ignored `apps/api/.env.local`. The token needs D1 Read permission for API queries and D1 Write permission for migrations or seeding. The API uses Cloudflare's D1 HTTP query API; the browser never receives the token. The D1 database is remote even when the web app and API run on localhost.
+Use `dev:d1` or `dev:admin:local` for local D1, and the `dev:admin:production` setup above for production writes. Both use the API Worker's `DB` binding. The production target is configured in the ignored `apps/api/wrangler.production.toml`, with authentication handled by Wrangler.
 
 SQL migrations live in `apps/api/src/db/migrations/`. Run `bun run db:migrate` once after creating an empty D1 database and after each schema change. To populate an empty database with the current JSON development data, run `D1_SEED_DEVELOPMENT_DATA=1 bun run db:setup` instead. The seed records its version and preserves existing rows on later runs; editing JSON afterward does not update D1.
 
 Existing Turso rows are **not** copied by changing `API_DATA_SOURCE`. Export the complete source SQLite database to SQL, remove its `BEGIN TRANSACTION` and `COMMIT` lines as required by D1, and import that SQL into a *new empty* D1 database with `wrangler d1 execute <DATABASE_NAME> --remote --file=<DUMP.sql>`. Importing the complete dump carries `schema_migrations` and `seed_history`; do not run `db:migrate` or `db:setup` first against the destination. Compare table row counts before switching the API. Keep the dump outside Git and retain the Turso source until the D1 data has been checked. See [Cloudflare's import guide](https://developers.cloudflare.com/d1/best-practices/import-export-data/).
 
-The local Bun API still uses the D1 HTTP query API in `d1` mode, including the migration and seed commands. The API Worker entry uses the `DB` D1 binding for requests and needs no Cloudflare API token. Cloudflare [recommends the REST API primarily for administration](https://developers.cloudflare.com/d1/tutorials/build-an-api-to-access-d1/).
+The legacy Bun API `API_DATA_SOURCE=d1` adapter remains as a separate HTTP query API path requiring `CLOUDFLARE_ACCOUNT_ID`, `D1_DATABASE_ID`, and `CLOUDFLARE_API_TOKEN`. The current production Admin, migration, and seed commands use Wrangler instead.
 
 ## Separate Cloudflare Workers (prepared, not deployed)
 
 `apps/api/src/worker.ts` uses the same Elysia routes and response types as the Bun entry, with the [experimental Elysia Cloudflare adapter](https://elysiajs.com/integrations/cloudflare-worker). `apps/api/wrangler.local.toml` is for local development only and must not be deployed. `apps/web/wrangler.toml.example` serves the Vite output as static assets; `apps/api/wrangler.toml.example` binds an existing D1 database for deployment. Copy each example to `wrangler.toml` and replace all placeholders before deployment. JSON development does not invoke Wrangler.
 
-1. Create or migrate the D1 database as described above. Put its **existing** database ID and name into the API Wrangler config. The API Worker uses `DB`; `CLOUDFLARE_API_TOKEN` is needed only for the separate Bun migration/seed commands and local Bun `d1` mode.
+1. Create or migrate the D1 database as described above. Put its **existing** database ID and name into the API Wrangler config. The API Worker uses `DB`. Specify the same D1 database in the local production Admin and public API configurations. Leave `ADMIN_API_TOKEN` unset on the public API; manage data through the local API.
 2. Set the API config's `CATALOG_URL` and `IKACLO_API_ORIGIN`, and set `CORS_ALLOWED_ORIGINS` to the final Web Worker origin. The Web origin must be exact, including scheme; list multiple origins separated by commas if needed.
-3. Deploy the API from `apps/api/` with `bunx wrangler deploy --config wrangler.toml`. Set `VITE_API_URL` to that API Worker URL **before** building the Web app, for example in `apps/web/.env.production`. Then run `bun run --filter web build` at the repository root and deploy from `apps/web/` with `bunx wrangler deploy --config wrangler.toml`.
+3. Deploy the API from `apps/api/` with `bunx wrangler@4.136.3 deploy --config wrangler.toml`. Set `VITE_API_URL` to that API Worker URL **before** building the Web app, for example in `apps/web/.env.production`. Then run `bun run --filter web build` at the repository root and deploy from `apps/web/` with `bunx wrangler@4.136.3 deploy --config wrangler.toml`.
 4. Open the deployed Debug and Overlay views, check API requests and CORS, and verify the OBS Browser Source separately. Dock, Debug and Overlay must remain on the same **Web** origin for `BroadcastChannel` and `localStorage` to work; the API can have another origin.
 
 The API Worker fetches the three catalogs from `CATALOG_URL` once per Worker isolate, validates them, and retains them in memory. A failed fetch returns HTTP 503 during initialization and is retried on a later request. Its catalog availability therefore depends on the CDN during a cold start. The Bun API continues to read the ignored local catalog files. The Vite `_headers` file preserves same-origin iframe and security headers for Cloudflare static assets; Vite's dev/preview server still uses `vite.config.ts`.

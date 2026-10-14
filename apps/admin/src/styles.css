@@ -34,15 +34,9 @@ button, input, select { transition: background-color .15s ease, border-color .15
 .header-target, .environment-badge { padding: 4px 8px; border: 1px solid var(--line-strong); border-radius: 6px; color: var(--muted); background: var(--surface); font-size: 12px; font-weight: 500; }
 .header-target.production, .environment-badge.production { color: #fcd34d; border-color: #765e27; }
 
-.connection-panel { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(180px, 1fr) minmax(240px, 1.2fr) auto; gap: 16px; align-items: start; padding: 20px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); }
+.connection-panel { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(240px, 1.2fr) auto; gap: 16px; align-items: start; padding: 20px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); }
 .connection-heading { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; }
 .connection-heading h2 { margin: 0; font-size: 14px; font-weight: 600; }
-.target-switch { display: flex; margin-top: 23px; border: 1px solid var(--line-strong); border-radius: 8px; overflow: hidden; }
-.target-switch button { flex: 1; padding: 9px 12px; border: 0; border-radius: 0; color: var(--muted); background: var(--surface); font-size: 13px; white-space: nowrap; }
-.target-switch button + button { border-left: 1px solid var(--line-strong); }
-.target-switch button.active { color: var(--ink); background: var(--accent-soft); }
-.target-switch button:hover:not(:disabled) { color: var(--ink); background: var(--accent-soft); }
-.target-switch button:focus-visible { outline-offset: -3px; }
 .production-notice { grid-column: 1 / -1; margin: 0; padding: 10px 12px; border: 1px solid #765e27; border-radius: 8px; color: #fcd34d; background: #282334; font-size: 13px; }
 .api-url { min-width: 0; margin: 0; }
 .api-url span { display: block; margin-bottom: 6px; color: var(--muted); font-size: 12px; }
@@ -116,14 +110,15 @@ fieldset legend small { color: var(--muted); font-size: 11px; font-weight: 400; 
 .team-cards { display: grid; gap: 6px; }
 .team-card { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; width: 100%; padding: 12px; border-color: var(--line); color: var(--muted); background: var(--surface); text-align: left; }
 .team-card.selected { border-color: var(--line-strong); color: var(--ink); background: var(--accent-soft); }
-.roster-complete, .roster-incomplete { padding: 3px 6px; border: 1px solid var(--line-strong); border-radius: 4px; font-size: 10px; font-weight: 400; white-space: nowrap; }
-.roster-complete { color: #6ee7b7; }
-.roster-incomplete { color: #fcd34d; }
+.team-status { padding: 3px 6px; border: 1px solid var(--line-strong); border-radius: 4px; font-size: 10px; font-weight: 500; white-space: nowrap; }
+.team-status-draft { color: #fcd34d; }
+.team-status-confirmed { color: #6ee7b7; }
+.team-status-hidden { color: #c4b5fd; }
+.team-card .roster-count { width: 100%; margin-top: 0; text-align: right; }
 .team-editor { min-width: 0; padding-left: 20px; border-left: 1px solid var(--line); }
 .team-editor h3 { margin: 0; font-size: 14px; font-weight: 600; }
-.team-basics { grid-template-columns: minmax(0, 1fr) 80px auto; align-items: end; }
-.toggle-field { display: flex; align-items: center; gap: 8px; min-height: 40px; color: var(--muted); font-size: 12px; white-space: nowrap; }
-.toggle-field input { width: 16px; min-height: auto; accent-color: var(--primary); }
+.team-basics { grid-template-columns: minmax(0, 1fr) 80px minmax(220px, .8fr); align-items: start; }
+.team-status-field small { max-width: 38ch; }
 .roster-list { display: grid; gap: 12px; }
 .roster-row { display: grid; grid-template-columns: 20px minmax(0, 1fr) minmax(0, 1.1fr) auto; gap: 8px; align-items: end; }
 .roster-order { align-self: center; color: var(--muted); font: 12px ui-monospace, monospace; text-align: center; }
@@ -142,7 +137,7 @@ fieldset legend small { color: var(--muted); font-size: 11px; font-weight: 400; 
   .header-target { font-size: 11px; }
   .connection-panel { grid-template-columns: minmax(0, 1fr); padding: 16px; }
   .connection-heading { grid-column: auto; }
-  .target-switch, .connection-actions { margin-top: 0; }
+  .connection-actions { margin-top: 0; }
   .production-notice, .connection-panel > .inline-message { grid-column: auto; }
   .welcome-panel { padding: 24px 16px; }
   .workspace-grid, .tournament-workspace { grid-template-columns: minmax(0, 1fr); gap: 16px; }

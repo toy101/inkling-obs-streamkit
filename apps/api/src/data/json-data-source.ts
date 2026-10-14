@@ -9,12 +9,19 @@ import type {
   Tournament,
   TournamentRosterEntry,
   TournamentTeam,
+  TournamentTeamStatus,
 } from "../models/tournament";
+import { normalizeTournamentTeamStatus } from "../models/tournament";
+
+type StoredTournamentTeam = Omit<TournamentTeam, "status"> & {
+  status?: TournamentTeamStatus;
+  rosterLockedAt?: string | null;
+};
 
 type JsonDataSourceOptions = {
   players: PlayerProfile[];
   tournaments: Tournament[];
-  tournamentTeams: TournamentTeam[];
+  tournamentTeams: StoredTournamentTeam[];
   tournamentRosterEntries: TournamentRosterEntry[];
   weaponCatalog: Pick<CatalogDataSource, "requireWeapon">;
 };
@@ -27,6 +34,18 @@ export function createJsonDataSource({
   weaponCatalog,
 }: JsonDataSourceOptions): StorageDataSource {
   const playersById = new Map(players.map((player) => [player.id, player]));
+  const normalizedTeams: TournamentTeam[] = tournamentTeams.map((team) => {
+    const rosterCount = tournamentRosterEntries.filter(
+      (entry) => entry.tournamentTeamId === team.id,
+    ).length;
+    return {
+      id: team.id,
+      tournamentId: team.tournamentId,
+      name: team.name,
+      displayOrder: team.displayOrder,
+      status: normalizeTournamentTeamStatus(team.status ?? "draft", rosterCount),
+    };
+  });
 
   function toOverlayPlayer(entry: TournamentRosterEntry): OverlayPlayer {
     const player = entry.playerId === null
@@ -52,9 +71,11 @@ export function createJsonDataSource({
     tournamentId: string,
     teamId: string,
   ): OverlayTeam | null {
-    const team = tournamentTeams.find(
+    const team = normalizedTeams.find(
       (candidate) =>
-        candidate.id === teamId && candidate.tournamentId === tournamentId,
+        candidate.id === teamId
+        && candidate.tournamentId === tournamentId
+        && candidate.status === "confirmed",
     );
     if (!team) return null;
 
@@ -84,8 +105,8 @@ export function createJsonDataSource({
       return tournaments;
     },
     async listTournamentTeams(tournamentId) {
-      return tournamentTeams
-        .filter((team) => team.tournamentId === tournamentId)
+      return normalizedTeams
+        .filter((team) => team.tournamentId === tournamentId && team.status === "confirmed")
         .sort((left, right) => left.displayOrder - right.displayOrder);
     },
     async getOverlayParticipants(query) {
