@@ -102,6 +102,7 @@ export function TournamentPanel({
     setTournamentMessage(null)
     setSelectedTeamId(null)
     setTeamForm(emptyTeam(1))
+    setTeamMessage(null)
     onSelectTournament(id)
   }
 
@@ -121,6 +122,9 @@ export function TournamentPanel({
         ? await api.updateTournament(selectedTournament.id, input)
         : await api.createTournament(input)
       onTournamentSaved(saved)
+      setSelectedTeamId(null)
+      setTeamForm(emptyTeam(1))
+      setTeamMessage(null)
       onSelectTournament(saved.id)
       setTournamentForm({ name: saved.name, status: saved.status })
       const successText = selectedTournament ? '大会を更新しました。' : '大会を作成しました。'

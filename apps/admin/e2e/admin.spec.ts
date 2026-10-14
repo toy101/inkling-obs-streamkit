@@ -388,6 +388,61 @@ test('大会保存後の一覧再取得が失敗しても保存済み応答を�
   expect(state.tournaments[0].name).toBe('再取得失敗テスト・更新')
 })
 
+for (const teamsRefreshFails of [false, true]) {
+  test(`大会保存後にチーム編集状態を初期化する（チーム再取得${teamsRefreshFails ? '失敗' : '成功'}）`, async ({ page }) => {
+    const state: MockState = {
+      environment: 'local', failNextPlayerSave: false, players: [],
+      tournaments: [{
+        id: 't1', organizerUserId: 'admin', name: '編集テスト大会', status: 'draft',
+        createdAt: '2026-10-14T00:00:00.000Z', updatedAt: '2026-10-14T00:00:00.000Z',
+      }],
+      teams: [{
+        id: 'team1', tournamentId: 't1', name: '既存チーム', displayOrder: 7, status: 'hidden',
+        roster: [{ id: 'roster1', tournamentTeamId: 'team1', registeredName: '既存参加者', displayOrder: 1, playerId: null }],
+      }],
+    }
+    await mockApi(page, state)
+    await connect(page)
+    await page.getByRole('button', { name: /編集テスト大会/ }).click()
+    await page.getByRole('button', { name: /既存チーム 表示順/ }).click()
+    await expect(page.getByRole('heading', { name: 'チームを編集', exact: true })).toBeVisible()
+    await page.getByLabel('チーム名 必須').fill('')
+    await page.getByRole('button', { name: 'チームを更新' }).click()
+    await expect(page.getByText('チーム名を入力してください。')).toBeVisible()
+    await page.getByLabel('チーム名 必須').fill('既存チーム')
+
+    if (teamsRefreshFails) {
+      await page.route('http://127.0.0.1:8787/admin/tournaments/t1/teams', (route) => {
+        if (route.request().method() === 'GET') {
+          return json(route, { message: 'チーム一覧を再取得できません。' }, 503)
+        }
+        return route.fallback()
+      })
+    }
+    await page.getByLabel('大会名 必須').fill('編集テスト大会・更新')
+    await page.getByRole('button', { name: '大会を更新' }).click()
+    await expect(page.getByText('大会を更新しました。')).toBeVisible()
+    if (teamsRefreshFails) {
+      await expect(page.getByText('チーム一覧を再取得できません。', { exact: true })).toBeVisible()
+    } else {
+      await expect(page.getByRole('button', { name: /既存チーム 表示順/ })).toBeVisible()
+    }
+    await expect(page.getByLabel('チーム名 必須')).toBeEnabled()
+    await expect(page.getByLabel('チーム名 必須')).toHaveValue('')
+    await expect(page.getByLabel('表示順')).toHaveValue('1')
+    await expect(page.getByLabel('チームの状態')).toHaveValue('draft')
+    await expect(page.getByLabel('参加者 1 登録名')).toHaveValue('')
+    await expect(page.getByText('チーム名を入力してください。')).toHaveCount(0)
+    await expect(page.getByRole('heading', { name: 'チームを登録', exact: true })).toBeVisible()
+
+    await page.getByLabel('表示順').fill('8')
+    await page.getByRole('button', { name: 'チームを登録', exact: true }).click()
+    await expect(page.getByText('チーム名を入力してください。')).toBeVisible()
+    expect(state.teams).toHaveLength(1)
+    expect(state.teams[0]).toMatchObject({ id: 'team1', name: '既存チーム', displayOrder: 7, status: 'hidden' })
+  })
+}
+
 test('チームの保存中は大会・チーム・編集画面の切替を防ぐ', async ({ page }) => {
   let releaseSave = () => {}
   const teamSaveWait = new Promise<void>((resolve) => { releaseSave = resolve })

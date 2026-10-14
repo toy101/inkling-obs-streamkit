@@ -233,8 +233,16 @@ describe("production Wrangler runtime", () => {
     });
     const applyIndex = calls.findIndex((call) => call.args.includes("apply"));
     const seedIndex = calls.findIndex((call) => call.args.includes("--file"));
+    const seedPath = join(root, ".data/d1-production-seed.sql");
     expect(seedIndex).toBeGreaterThan(applyIndex);
-    expect(calls[seedIndex]?.args).toContain("--remote");
+    expect(calls[seedIndex]?.args).toEqual([
+      "d1", "execute", "inkling-production", "--remote",
+      "--config", "wrangler.production.toml", "--env", "production",
+      "--file", seedPath,
+    ]);
+    const seedSql = await Bun.file(seedPath).text();
+    expect(seedSql).toContain("INSERT INTO seed_history (name)");
+    expect(seedSql).toContain("WHERE NOT EXISTS (SELECT 1 FROM seed_history WHERE name = 'development-v1')");
   });
 
   test("check reports blocked legacy-free databases without mutating them", async () => {
