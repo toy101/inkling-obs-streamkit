@@ -216,7 +216,8 @@ test("未知の保存IDは有効な選択へ正規化して反映する", async 
   page,
   api,
 }) => {
-  await page.goto("/?view=dock");
+  // 初期読み込みがテスト用の保存値を消さないよう、Dockの起動前に準備する。
+  await page.goto("/");
   await setStoredSelection(
     page,
     JSON.stringify({
@@ -229,7 +230,7 @@ test("未知の保存IDは有効な選択へ正規化して反映する", async 
       matchLabel: "未知",
     }),
   );
-  await page.reload();
+  await page.goto("/?view=dock");
 
   const dock = page.locator("main.dock");
   await expect(dock.getByLabel("大会")).toHaveValue("tournament-a");
