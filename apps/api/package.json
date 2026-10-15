@@ -5,19 +5,26 @@
     "test": "bun test ./test",
     "prepare:assets": "bun run ../../scripts/prepare-runtime-assets.ts api",
     "dev": "bun run prepare:assets && bun run --watch src/index.ts",
-    "db:dev": "bun run src/db/dev.ts",
-    "db:migrate": "bun run src/db/migrate.ts",
-    "db:seed": "bun run src/db/seed.ts",
-    "db:setup": "bun run db:seed"
+    "dev:json": "API_DATA_SOURCE=json bun run dev",
+    "dev:d1:remote": "bun run src/db/wrangler-production.ts dev",
+    "dev:d1": "bun run prepare:assets && bun run db:setup:local && bun run wrangler dev --config wrangler.local.toml --local --ip 127.0.0.1 --port 8787 --persist-to .data/wrangler",
+    "db:setup:local": "bun run src/db/setup-local.ts",
+    "db:migrate": "bun run src/db/wrangler-production.ts migrate",
+    "db:seed": "bun run src/db/wrangler-production.ts seed",
+    "db:setup": "bun run db:seed",
+    "cf:login": "wrangler login",
+    "cf:whoami": "wrangler whoami",
+    "db:check:production": "bun run src/db/wrangler-production.ts check",
+    "db:migrate:production": "bun run db:migrate"
   },
   "dependencies": {
     "@elysia/cors": "^1.4.2",
     "@elysia/openapi": "^1.4.16",
-    "@libsql/client": "^0.18.0",
     "elysia": "latest"
   },
   "devDependencies": {
-    "bun-types": "latest"
+    "bun-types": "latest",
+    "wrangler": "4.136.3"
   },
   "module": "src/index.js"
 }

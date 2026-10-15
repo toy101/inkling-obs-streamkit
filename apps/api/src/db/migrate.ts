@@ -9,6 +9,8 @@ const migrations = [
   "006_localized_matchup_catalogs.sql",
   "007_rule_descriptions.sql",
   "008_external_matchup_catalogs.sql",
+  "009_add_tournament_team_status.sql",
+  "010_backfill_tournament_team_status.sql",
 ];
 
 export async function migrate() {
@@ -28,16 +30,9 @@ export async function migrate() {
 
     await db.batch(
       [...statements, { sql: "INSERT INTO schema_migrations (name) VALUES (?)", args: [name] }],
-      "write",
     );
     console.log(`Applied migration: ${name}`);
   }
 }
 
-if (import.meta.main) {
-  try {
-    await migrate();
-  } finally {
-    db.close();
-  }
-}
+if (import.meta.main) await migrate();

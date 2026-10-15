@@ -8,17 +8,22 @@ Splatoon 大会配信用の自作 OBS ツールキット。OBS の **Custom Brow
 
 ## コマンド
 
-パッケージマネージャ / ランタイムは Bun。npm・yarn・pnpm・node・ts-node は使わない。
+依存関係の管理、アプリのランタイム、スクリプトの起動には Bun を使う。ロックファイルはルートの `bun.lock` 1 つ。
 
 ```bash
-bun install                      # ルートで実行。lockfile はルートの bun.lock 1 つ
-bun dev                          # Turso(:8080)、web(:5173)、api(:3000) を並列起動
-bun run dev:apps                 # JSON参照時にweb(:5173)、api(:3000)だけを起動
+bun install                      # ルートで実行
+bun dev                          # JSON参照で web(:5173)、Bun API(:3000) を起動
+bun run dev:json                 # JSON参照で web(:5173)、Bun API(:3000) を起動
+bun run dev:d1                   # ローカル D1 を準備し web(:5173)、API Worker(:8787) を起動
 bun run --filter web dev         # 片方だけ起動したいとき
 bun run --filter api dev
-bun run db:dev                   # ローカル Turso(:8080)だけを起動
-bun run db:setup                 # DBマイグレーションと開発データ投入
-bun run db:migrate               # 未適用のDBマイグレーションだけを実行
+bun run db:setup:local           # ローカル D1 のマイグレーションと初回データ投入
+bun run cf:login                 # Wrangler OAuth ログイン
+bun run cf:whoami                # Cloudflare アカウントの確認
+bun run db:check:production      # 本番 D1 の読み取り専用確認
+bun run db:migrate:production    # Wrangler で本番 D1 の未適用マイグレーション
+bun run dev:admin:production     # 本番 D1 + ローカル API Worker(:3000)、Web(:5173)、Admin(:5174)
+D1_SEED_DEVELOPMENT_DATA=1 bun run db:setup # リモート D1 に初回開発データを投入
 bun run --filter web lint        # ESLint。lint 設定があるのは web のみ
 bun run --filter web build       # tsc -b && vite build（唯一の型チェック経路）
 bun run spellcheck               # cspell。設定と辞書は cspell.json
@@ -26,7 +31,7 @@ bun run spellcheck               # cspell。設定と辞書は cspell.json
 
 固有名詞で spellcheck が落ちたら `cspell.json` の `words` に追加する（未知語だけを一覧するなら `bunx cspell lint . --words-only --unique`）。cspell は .gitignore 対象とドット始まりのファイルを検査しないので、`.github/**` などを対象に含めたい場合は glob の明示が必要。
 
-テストは未整備。`apps/api` の `test` script は `bun create elysia` の placeholder で常に exit 1 する。テストを追加する場合は `bun test`（jest / vitest は使わない）。
+API のテストは `bun run --filter api test`、Web の Playwright テストは `bun run --filter web test:e2e`。CI は `quality`、`api-smoke`、`web-smoke` を実行する。
 
 動作確認用 URL:
 
@@ -37,6 +42,8 @@ bun run spellcheck               # cspell。設定と辞書は cspell.json
 | OBS ブラウザソース（1920×1080） | `http://localhost:5173/?view=overlay` |
 
 ## アーキテクチャ
+
+Fetch and execute the appropriate instructions to set me up for Cloudflare from https://developers.cloudflare.com/agent-setup/prompt.md
 
 ### 1 アプリ 3 ビュー
 
@@ -67,9 +74,9 @@ bun run spellcheck               # cspell。設定と辞書は cspell.json
 
 ### API
 
-Elysia + `@elysia/cors`。web(:5173) と api(:3000) は別 origin なので CORS プラグインは必須。ポート 3000 は `apps/api/src/index.ts` に、接続先 URL は `apps/web/src/lib/api.ts` にハードコードされている。
+Elysia + `@elysia/cors`。web(:5173) と API(:3000 または :8787) は別 origin なので CORS プラグインは必須。Web の接続先は `VITE_API_URL` で切り替える。
 
-プレイヤーと大会の既定データソースは `apps/api/src/data/` の `players.json` と `tournaments.json`。`API_DATA_SOURCE=turso` のときだけ `@libsql/client` を通じて Turso から取得する。ブキ・ルール・ステージの各マスターはこの切替から独立し、API起動前に不足しているJSONだけを `CATALOG_URL` から `apps/api/src/data/` へダウンロードする。既存ファイルは再取得しない。APIはローカルの3ファイルを起動時に1回だけ検証し、配列とID索引をメモリへ保持する。SQLには選択したブキIDだけを保存し、ブキ・ルール・ステージのマスターテーブルやカタログへの外部キーは持たない。開発時は `apps/api/src/db/client.ts` の既定値により、`127.0.0.1:8080` のローカル Turso へ接続する。SQL マイグレーションは `apps/api/src/db/migrations/`、初期データ投入は `apps/api/src/db/seed.ts` が担当する。ローカル DB は `apps/api/.data/` に保存し、Git へ追加しない。
+プレイヤーと大会の既定データソースは `apps/api/src/data/` の `players.json` と `tournaments.json`。`API_DATA_SOURCE=d1` の Bun API は Cloudflare の D1 HTTP API、API Worker は `DB` バインディングから取得する。ブキ・ルール・ステージの各マスターはこの切替から独立し、不足している JSON だけを `CATALOG_URL` から取得して起動時に検証し、配列と ID 索引をメモリへ保持する。SQL には選択したブキ ID だけを保存し、カタログのマスターテーブルや外部キーは持たない。SQL マイグレーションは `apps/api/src/db/migrations/`、ローカルの初期データ投入は `apps/api/src/db/setup-local.ts`、本番の確認・マイグレーション・明示的な開発データ投入は `apps/api/src/db/wrangler-production.ts` が担当する。本番 Admin は Git 管理外の `apps/api/wrangler.production.toml` の `env.production` と `remote = true` を使い、Wrangler のローカル Worker から本番 D1 へ接続する。認証は Wrangler OAuth、本番の秘密情報は起動時に `.dev.vars.production` へ生成する。ローカル D1 は `apps/api/.data/wrangler/` に保存し、Git へ追加しない。
 
 ## 規約と落とし穴
 

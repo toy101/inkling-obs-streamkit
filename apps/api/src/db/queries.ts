@@ -1,4 +1,4 @@
-import type { Row } from "@libsql/client";
+import type { Row, Statement } from "./client";
 
 import type { Position } from "../models/catalog";
 import type {
@@ -8,9 +8,22 @@ import type {
   OverlayTeamsQuery,
 } from "../models/overlay";
 import type { PlayerProfile } from "../models/player";
-import type { Tournament, TournamentStatus, TournamentTeam } from "../models/tournament";
-import { requireWeapon } from "../catalog-store";
-import { db } from "./client";
+import type {
+  Tournament,
+  TournamentStatus,
+  TournamentTeam,
+  TournamentTeamStatus,
+} from "../models/tournament";
+import type { StorageDataSource } from "../create-data-source";
+
+export type QueryDatabase = {
+  execute(statement: string | Statement): Promise<{ rows: Row[] }>;
+  batch(statements: readonly (string | Statement)[]): Promise<void>;
+};
+
+type WeaponCatalog = {
+  requireWeapon(weaponId: string, source: string): { id: string; name: string };
+};
 
 function text(row: Row, key: string): string {
   const value = row[key];
@@ -46,129 +59,152 @@ function tournamentStatus(row: Row): TournamentStatus {
   }
 }
 
-export async function listPlayers(id: string | null): Promise<PlayerProfile[]> {
-  const { rows } = await db.execute({
-    sql: `SELECT p.id, p.display_name, p.icon_url,
-        pos.id AS position_id, pos.name AS position_name, pw.weapon_id
-      FROM players p
-      LEFT JOIN positions pos ON pos.id = p.position_id
-      LEFT JOIN player_weapons pw ON pw.player_id = p.id
-      WHERE (? IS NULL OR p.id = ?)
-      ORDER BY p.id, pw.display_order`,
-    args: [id, id],
-  });
-  const profiles = new Map<string, PlayerProfile>();
-  for (const row of rows) {
-    const playerId = text(row, "id");
-    let profile = profiles.get(playerId);
-    if (!profile) {
-      profile = {
-        id: playerId,
-        displayName: text(row, "display_name"),
-        iconUrl: nullableText(row, "icon_url"),
-        position: position(row),
-        weaponIds: [],
-      };
-      profiles.set(playerId, profile);
-    }
-    const weaponId = nullableText(row, "weapon_id");
-    if (weaponId !== null) profile.weaponIds.push(weaponId);
+function tournamentTeamStatus(row: Row): TournamentTeamStatus {
+  const status = text(row, "status");
+  switch (status) {
+    case "draft": case "confirmed": case "hidden": return status;
+    default: throw new Error("Invalid tournament team status in database");
   }
-  return Array.from(profiles.values());
 }
 
-export async function listTournaments(): Promise<Tournament[]> {
-  const { rows } = await db.execute("SELECT * FROM tournaments ORDER BY created_at, id");
-  return rows.map((row) => ({
-    id: text(row, "id"), organizerUserId: text(row, "organizer_user_id"),
-    name: text(row, "name"), status: tournamentStatus(row),
-    createdAt: text(row, "created_at"), updatedAt: text(row, "updated_at"),
-  }));
-}
-
-export async function listTournamentTeams(tournamentId: string): Promise<TournamentTeam[]> {
-  const { rows } = await db.execute({
-    sql: "SELECT * FROM tournament_teams WHERE tournament_id = ? ORDER BY display_order, id",
-    args: [tournamentId],
-  });
-  return rows.map((row) => ({
-    id: text(row, "id"), tournamentId: text(row, "tournament_id"),
-    name: text(row, "name"), displayOrder: integer(row, "display_order"),
-    rosterLockedAt: nullableText(row, "roster_locked_at"),
-  }));
-}
-
-function toOverlayTeam(rows: Row[], teamId: string): OverlayTeam | null {
-  const teamRows = rows.filter((row) => row.team_id === teamId);
-  const firstRow = teamRows[0];
-  if (!firstRow) return null;
-
-  const players = new Map<string, OverlayPlayer>();
-  for (const row of teamRows) {
-    const rosterEntryId = text(row, "roster_entry_id");
-    let player = players.get(rosterEntryId);
-    if (!player) {
-      player = {
-        rosterEntryId,
-        registeredName: text(row, "registered_name"),
-        iconUrl: nullableText(row, "icon_url"),
-        position: position(row),
-        weapons: [],
-      };
-      players.set(rosterEntryId, player);
+export function createD1StorageDataSource(
+  db: QueryDatabase,
+  { requireWeapon }: WeaponCatalog,
+): StorageDataSource {
+  async function listPlayers(id: string | null): Promise<PlayerProfile[]> {
+    const { rows } = await db.execute({
+      sql: `SELECT p.id, p.display_name, p.icon_url,
+          pos.id AS position_id, pos.name AS position_name, pw.weapon_id
+        FROM players p
+        LEFT JOIN positions pos ON pos.id = p.position_id
+        LEFT JOIN player_weapons pw ON pw.player_id = p.id
+        WHERE (? IS NULL OR p.id = ?)
+        ORDER BY p.id, pw.display_order`,
+      args: [id, id],
+    });
+    const profiles = new Map<string, PlayerProfile>();
+    for (const row of rows) {
+      const playerId = text(row, "id");
+      let profile = profiles.get(playerId);
+      if (!profile) {
+        profile = {
+          id: playerId,
+          displayName: text(row, "display_name"),
+          iconUrl: nullableText(row, "icon_url"),
+          position: position(row),
+          weaponIds: [],
+        };
+        profiles.set(playerId, profile);
+      }
+      const weaponId = nullableText(row, "weapon_id");
+      if (weaponId !== null) profile.weaponIds.push(weaponId);
     }
-    const weaponId = nullableText(row, "weapon_id");
-    if (weaponId !== null) {
-      const sourcePlayerId = nullableText(row, "player_id");
-      const source = sourcePlayerId === null
-        ? `roster entry ${rosterEntryId}`
-        : `player ${sourcePlayerId}`;
-      const weapon = requireWeapon(weaponId, source);
-      player.weapons.push({ ...weapon, imageUrl: null });
-    }
+    return Array.from(profiles.values());
   }
 
-  const [first, second, third, fourth] = players.values();
-  if (!first || !second || !third || !fourth || players.size !== 4) return null;
-  return { id: teamId, name: text(firstRow, "team_name"), players: [first, second, third, fourth] };
-}
+  async function listTournaments(): Promise<Tournament[]> {
+    const { rows } = await db.execute("SELECT * FROM tournaments ORDER BY created_at, id");
+    return rows.map((row) => ({
+      id: text(row, "id"), organizerUserId: text(row, "organizer_user_id"),
+      name: text(row, "name"), status: tournamentStatus(row),
+      createdAt: text(row, "created_at"), updatedAt: text(row, "updated_at"),
+    }));
+  }
 
-export async function getOverlayParticipants(query: OverlayTeamsQuery): Promise<OverlayParticipants | null> {
-  if (query.alphaTournamentTeamId === query.bravoTournamentTeamId) return null;
+  async function listTournamentTeams(tournamentId: string): Promise<TournamentTeam[]> {
+    const { rows } = await db.execute({
+      sql: `SELECT team.* FROM tournament_teams team
+        WHERE team.tournament_id = ?
+          AND team.status = 'confirmed'
+          AND 4 = (SELECT COUNT(*) FROM tournament_roster_entries roster
+            WHERE roster.tournament_team_id = team.id)
+        ORDER BY team.display_order, team.id`,
+      args: [tournamentId],
+    });
+    return rows.map((row) => ({
+      id: text(row, "id"), tournamentId: text(row, "tournament_id"),
+      name: text(row, "name"), displayOrder: integer(row, "display_order"),
+      status: tournamentTeamStatus(row),
+    }));
+  }
 
-  const { rows } = await db.execute({
-    sql: `SELECT t.id AS tournament_id, t.name AS tournament_name,
-        team.id AS team_id, team.name AS team_name,
-        r.id AS roster_entry_id, r.registered_name,
-        p.id AS player_id, p.icon_url,
-        pos.id AS position_id, pos.name AS position_name,
-        pw.weapon_id
-      FROM tournaments t
-      JOIN tournament_teams team ON team.tournament_id = t.id
-      JOIN tournament_roster_entries r ON r.tournament_team_id = team.id
-      LEFT JOIN players p ON p.id = r.player_id
-      LEFT JOIN positions pos ON pos.id = p.position_id
-      LEFT JOIN player_weapons pw ON pw.player_id = p.id
-      WHERE t.id = ? AND team.id IN (?, ?)
-      ORDER BY team.display_order, r.display_order, pw.display_order`,
-    args: [
-      query.tournamentId,
-      query.alphaTournamentTeamId,
-      query.bravoTournamentTeamId,
-    ],
-  });
-  const firstRow = rows[0];
-  if (!firstRow) return null;
-  const alpha = toOverlayTeam(rows, query.alphaTournamentTeamId);
-  const bravo = toOverlayTeam(rows, query.bravoTournamentTeamId);
-  if (!alpha || !bravo) return null;
+  function toOverlayTeam(rows: Row[], teamId: string): OverlayTeam | null {
+    const teamRows = rows.filter((row) => row.team_id === teamId);
+    const firstRow = teamRows[0];
+    if (!firstRow) return null;
 
-  return {
-    tournament: {
-      id: text(firstRow, "tournament_id"),
-      name: text(firstRow, "tournament_name"),
-    },
-    alpha,
-    bravo,
-  };
+    const players = new Map<string, OverlayPlayer>();
+    for (const row of teamRows) {
+      const rosterEntryId = text(row, "roster_entry_id");
+      let player = players.get(rosterEntryId);
+      if (!player) {
+        player = {
+          rosterEntryId,
+          registeredName: text(row, "registered_name"),
+          iconUrl: nullableText(row, "icon_url"),
+          position: position(row),
+          weapons: [],
+        };
+        players.set(rosterEntryId, player);
+      }
+      const weaponId = nullableText(row, "weapon_id");
+      if (weaponId !== null) {
+        const sourcePlayerId = nullableText(row, "player_id");
+        const source = sourcePlayerId === null
+          ? `roster entry ${rosterEntryId}`
+          : `player ${sourcePlayerId}`;
+        const weapon = requireWeapon(weaponId, source);
+        player.weapons.push({ ...weapon, imageUrl: null });
+      }
+    }
+
+    const [first, second, third, fourth] = players.values();
+    if (!first || !second || !third || !fourth || players.size !== 4) return null;
+    return { id: teamId, name: text(firstRow, "team_name"), players: [first, second, third, fourth] };
+  }
+
+  async function getOverlayParticipants(query: OverlayTeamsQuery): Promise<OverlayParticipants | null> {
+    if (query.alphaTournamentTeamId === query.bravoTournamentTeamId) return null;
+
+    const { rows } = await db.execute({
+      sql: `SELECT t.id AS tournament_id, t.name AS tournament_name,
+          team.id AS team_id, team.name AS team_name,
+          r.id AS roster_entry_id, r.registered_name,
+          p.id AS player_id, p.icon_url,
+          pos.id AS position_id, pos.name AS position_name,
+          pw.weapon_id
+        FROM tournaments t
+        JOIN tournament_teams team ON team.tournament_id = t.id
+        JOIN tournament_roster_entries r ON r.tournament_team_id = team.id
+        LEFT JOIN players p ON p.id = r.player_id
+        LEFT JOIN positions pos ON pos.id = p.position_id
+        LEFT JOIN player_weapons pw ON pw.player_id = p.id
+        WHERE t.id = ? AND team.id IN (?, ?)
+          AND team.status = 'confirmed'
+          AND 4 = (SELECT COUNT(*) FROM tournament_roster_entries roster_count
+            WHERE roster_count.tournament_team_id = team.id)
+        ORDER BY team.display_order, r.display_order, pw.display_order`,
+      args: [
+        query.tournamentId,
+        query.alphaTournamentTeamId,
+        query.bravoTournamentTeamId,
+      ],
+    });
+    const firstRow = rows[0];
+    if (!firstRow) return null;
+    const alpha = toOverlayTeam(rows, query.alphaTournamentTeamId);
+    const bravo = toOverlayTeam(rows, query.bravoTournamentTeamId);
+    if (!alpha || !bravo) return null;
+
+    return {
+      tournament: {
+        id: text(firstRow, "tournament_id"),
+        name: text(firstRow, "tournament_name"),
+      },
+      alpha,
+      bravo,
+    };
+  }
+
+  return { listPlayers, listTournaments, listTournamentTeams, getOverlayParticipants };
 }

@@ -1,0 +1,13 @@
+name = "inkling-obs-streamkit-api"
+main = "src/worker.ts"
+compatibility_date = "2026-09-28"
+
+[vars]
+CATALOG_URL = "https://inkling-obs-streamkit.toy101-mov.org/"
+CORS_ALLOWED_ORIGINS = "https://<WEB_WORKER_DOMAIN>"
+IKACLO_API_ORIGIN = "https://<IKACLO_API_DOMAIN>"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "<D1_DATABASE_NAME>"
+database_id = "<D1_DATABASE_ID>"

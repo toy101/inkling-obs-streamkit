@@ -1,4 +1,5 @@
 import type { Rule, Stage, Weapon } from "./models/catalog";
+import type { CatalogDataSource } from "./create-data-source";
 
 const MAX_CATALOG_BYTES = 64 * 1024;
 
@@ -173,6 +174,17 @@ async function readCatalogJson(
     );
   }
 
+  return parseCatalogBytes(bytes, catalogName, location);
+}
+
+function parseCatalogBytes(
+  bytes: Uint8Array,
+  catalogName: string,
+  location: string,
+): unknown {
+  if (bytes.byteLength > MAX_CATALOG_BYTES) {
+    throw new Error(`${catalogName} from ${location} exceeds ${MAX_CATALOG_BYTES} bytes.`);
+  }
   try {
     const value: unknown = JSON.parse(
       new TextDecoder("utf-8", { fatal: true }).decode(bytes),
@@ -180,9 +192,7 @@ async function readCatalogJson(
     return value;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(
-      `${catalogName} from ${location} is not valid JSON: ${message}`,
-    );
+    throw new Error(`${catalogName} from ${location} is not valid JSON: ${message}`);
   }
 }
 
@@ -193,6 +203,45 @@ async function loadCatalog<T extends CatalogItem>(
   const location = catalogUrl.pathname;
   const value = await readCatalogJson(catalogUrl, definition.catalogName, location);
   return { ...parseCatalog(value, definition), location };
+}
+
+async function loadRemoteCatalog<T extends CatalogItem>(
+  definition: CatalogDefinition<T>,
+  baseUrl: URL,
+): Promise<LoadedCatalog<T>> {
+  const url = new URL(definition.fileName, baseUrl);
+  const response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+  if (!response.ok) {
+    throw new Error(`${definition.catalogName} download failed: HTTP ${response.status}.`);
+  }
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.toLowerCase().includes("application/json")) {
+    throw new Error(`${definition.catalogName} from ${url.href} has an invalid content type.`);
+  }
+  const reader = response.body?.getReader();
+  if (!reader) {
+    throw new Error(`${definition.catalogName} from ${url.href} has no response body.`);
+  }
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > MAX_CATALOG_BYTES) {
+      await reader.cancel();
+      throw new Error(`${definition.catalogName} from ${url.href} exceeds ${MAX_CATALOG_BYTES} bytes.`);
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  const value = parseCatalogBytes(bytes, definition.catalogName, url.href);
+  return { ...parseCatalog(value, definition), location: url.href };
 }
 
 function getStore(): CatalogStore {
@@ -221,6 +270,26 @@ export async function initializeCatalogStore(): Promise<void> {
       `Loaded ${loaded.items.length} ${definition.itemName} from ${loaded.location}`,
     );
   }
+}
+
+export async function initializeRemoteCatalogStore(baseUrlValue: string): Promise<void> {
+  if (store !== null) return;
+  let baseUrl: URL;
+  try {
+    baseUrl = new URL(baseUrlValue);
+  } catch {
+    throw new Error("CATALOG_URL must be a valid HTTPS URL in a Worker.");
+  }
+  if (baseUrl.protocol !== "https:" || baseUrl.username || baseUrl.password) {
+    throw new Error("CATALOG_URL must be an HTTPS URL without credentials in a Worker.");
+  }
+  baseUrl.pathname = baseUrl.pathname.endsWith("/") ? baseUrl.pathname : `${baseUrl.pathname}/`;
+  const [weapons, rules, stages] = await Promise.all([
+    loadRemoteCatalog(WEAPON_CATALOG, baseUrl),
+    loadRemoteCatalog(RULE_CATALOG, baseUrl),
+    loadRemoteCatalog(STAGE_CATALOG, baseUrl),
+  ]);
+  store = { weapons, rules, stages };
 }
 
 export function listWeapons(): Weapon[] {
@@ -252,3 +321,12 @@ export function requireWeapon(weaponId: string, source: string): Weapon {
   }
   return weapon;
 }
+
+export const catalogDataSource: CatalogDataSource = {
+  listWeapons,
+  listRules,
+  listStages,
+  findRule,
+  findStage,
+  requireWeapon,
+};

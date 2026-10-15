@@ -1,22 +1,18 @@
 import type { OverlayMatchup, OverlayTeam } from "./models/overlay";
-import { readHttpsOriginEnvironmentVariable } from "./env";
 
-const IKACLO_API_ORIGIN =
-  readHttpsOriginEnvironmentVariable("IKACLO_API_ORIGIN");
 const IKACLO_WEAPON_PATH = "/v1/3/weapons";
 const REQUEST_TIMEOUT_MS = 10_000;
-const weaponImageUrlCache = new Map<string, Promise<string | null>>();
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function validateImageUrl(value: unknown): string | null {
+function validateImageUrl(value: unknown, origin: string): string | null {
   if (typeof value !== "string") return null;
 
   try {
     const url = new URL(value);
-    return url.protocol === "https:" && url.origin === IKACLO_API_ORIGIN
+    return url.protocol === "https:" && url.origin === origin
       ? url.href
       : null;
   } catch {
@@ -24,12 +20,12 @@ function validateImageUrl(value: unknown): string | null {
   }
 }
 
-async function fetchWeaponImageUrl(weaponId: string): Promise<string | null> {
+async function fetchWeaponImageUrl(weaponId: string, origin: string): Promise<string | null> {
   if (!/^\d+$/.test(weaponId)) return null;
 
   try {
     const response = await fetch(
-      `${IKACLO_API_ORIGIN}${IKACLO_WEAPON_PATH}/${weaponId}`,
+      `${origin}${IKACLO_WEAPON_PATH}/${weaponId}`,
       {
         headers: { accept: "application/json" },
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
@@ -52,22 +48,11 @@ async function fetchWeaponImageUrl(weaponId: string): Promise<string | null> {
       return null;
     }
 
-    return validateImageUrl(payload.data.image_url);
+    return validateImageUrl(payload.data.image_url, origin);
   } catch (error) {
     console.warn(`Failed to load Ikaclo image for weapon ${weaponId}.`, error);
     return null;
   }
-}
-
-function getWeaponImageUrl(weaponId: string): Promise<string | null> {
-  const cached = weaponImageUrlCache.get(weaponId);
-  if (cached) return cached;
-
-  // Retain the promise so concurrent and later matchups reuse both successes
-  // and failures for the lifetime of this API process.
-  const request = fetchWeaponImageUrl(weaponId);
-  weaponImageUrlCache.set(weaponId, request);
-  return request;
 }
 
 function withWeaponImages(
@@ -93,30 +78,44 @@ function withWeaponImages(
   };
 }
 
-export async function attachWeaponImages(
-  matchup: OverlayMatchup,
-): Promise<OverlayMatchup> {
-  const weaponIds = new Set<string>();
+export function createWeaponImageEnricher(origin: string) {
+  const weaponImageUrlCache = new Map<string, Promise<string | null>>();
 
-  for (const team of [matchup.alpha, matchup.bravo]) {
-    for (const player of team.players) {
-      for (const weapon of player.weapons) {
-        weaponIds.add(weapon.id);
-      }
-    }
+  function getWeaponImageUrl(weaponId: string): Promise<string | null> {
+    const cached = weaponImageUrlCache.get(weaponId);
+    if (cached) return cached;
+
+    // Reuse concurrent requests and their results for the lifetime of this instance.
+    const request = fetchWeaponImageUrl(weaponId, origin);
+    weaponImageUrlCache.set(weaponId, request);
+    return request;
   }
 
-  const imageUrlEntries = await Promise.all(
-    Array.from(weaponIds, async (weaponId) => {
-      const imageUrl = await getWeaponImageUrl(weaponId);
-      return [weaponId, imageUrl] as const;
-    }),
-  );
-  const imageUrls = new Map(imageUrlEntries);
+  return async function attachWeaponImages(
+    matchup: OverlayMatchup,
+  ): Promise<OverlayMatchup> {
+    const weaponIds = new Set<string>();
 
-  return {
-    ...matchup,
-    alpha: withWeaponImages(matchup.alpha, imageUrls),
-    bravo: withWeaponImages(matchup.bravo, imageUrls),
+    for (const team of [matchup.alpha, matchup.bravo]) {
+      for (const player of team.players) {
+        for (const weapon of player.weapons) {
+          weaponIds.add(weapon.id);
+        }
+      }
+    }
+
+    const imageUrlEntries = await Promise.all(
+      Array.from(weaponIds, async (weaponId) => {
+        const imageUrl = await getWeaponImageUrl(weaponId);
+        return [weaponId, imageUrl] as const;
+      }),
+    );
+    const imageUrls = new Map(imageUrlEntries);
+
+    return {
+      ...matchup,
+      alpha: withWeaponImages(matchup.alpha, imageUrls),
+      bravo: withWeaponImages(matchup.bravo, imageUrls),
+    };
   };
 }

@@ -196,7 +196,7 @@ test("Dockのボタンでポジション表示を即時切替し、再読込後�
   api,
 }) => {
   await page.clock.install();
-  await page.goto("/?view=dock");
+  await page.goto("/");
   await page.evaluate((selection) => {
     localStorage.setItem("inkling:overlay-selection", JSON.stringify(selection));
   }, expectedSelection);
