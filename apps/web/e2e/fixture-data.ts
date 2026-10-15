@@ -37,21 +37,21 @@ const tournamentTeams: Record<string, TournamentTeam[]> = {
       tournamentId: "tournament-a",
       name: "Alpha",
       displayOrder: 1,
-      rosterLockedAt: "2026-01-01T00:00:00.000Z",
+      status: "confirmed",
     },
     {
       id: "team-bravo",
       tournamentId: "tournament-a",
       name: "Bravo",
       displayOrder: 2,
-      rosterLockedAt: "2026-01-01T00:00:00.000Z",
+      status: "confirmed",
     },
     {
       id: "team-charlie-a",
       tournamentId: "tournament-a",
       name: "Charlie",
       displayOrder: 3,
-      rosterLockedAt: "2026-01-01T00:00:00.000Z",
+      status: "confirmed",
     },
   ],
   "tournament-b": [
@@ -60,7 +60,7 @@ const tournamentTeams: Record<string, TournamentTeam[]> = {
       tournamentId: "tournament-b",
       name: "Charlie",
       displayOrder: 1,
-      rosterLockedAt: "2026-01-01T00:00:00.000Z",
+      status: "confirmed",
     },
   ],
 };

@@ -13,6 +13,7 @@ import type {
   Tournament,
   TournamentRosterEntry,
   TournamentTeam,
+  TournamentTeamStatus,
 } from "../src/models/tournament";
 import playerFixture from "./fixtures/players.json";
 import ruleFixture from "./fixtures/rules.json";
@@ -22,7 +23,10 @@ import weaponFixture from "./fixtures/weapons.json";
 
 type TournamentFixture = {
   tournaments: Tournament[];
-  tournamentTeams: TournamentTeam[];
+  tournamentTeams: Array<Omit<TournamentTeam, "status"> & {
+    status?: TournamentTeamStatus;
+    rosterLockedAt?: string | null;
+  }>;
   tournamentRosterEntries: TournamentRosterEntry[];
 };
 
@@ -184,5 +188,27 @@ describe("API smoke", () => {
 
     expect(response.status).toBe(200);
     expect(await response.text()).toBe("");
+  });
+
+  test("JSON mode normalizes legacy teams and excludes explicit hidden teams", async () => {
+    const catalogDataSource = createCatalogDataSource();
+    const storage = createJsonDataSource({
+      players,
+      tournaments: tournaments.tournaments,
+      tournamentTeams: tournaments.tournamentTeams.map((team) => team.id === "team-alpha"
+        ? { ...team, status: "hidden" as const }
+        : team),
+      tournamentRosterEntries: tournaments.tournamentRosterEntries,
+      weaponCatalog: catalogDataSource,
+    });
+
+    expect(await storage.listTournamentTeams("tournament-a")).toEqual([
+      expect.objectContaining({ id: "team-bravo", status: "confirmed" }),
+    ]);
+    expect(await storage.getOverlayParticipants({
+      tournamentId: "tournament-a",
+      alphaTournamentTeamId: "team-alpha",
+      bravoTournamentTeamId: "team-bravo",
+    })).toBeNull();
   });
 });

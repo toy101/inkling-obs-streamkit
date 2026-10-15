@@ -39,8 +39,8 @@ export function createDevelopmentSeedStatements(): Statement[] {
     })),
     ...tournamentTeams.map((team) => ({
       sql: `INSERT INTO tournament_teams
-        (id, tournament_id, name, display_order, roster_locked_at) VALUES (?, ?, ?, ?, ?)`,
-      args: [team.id, team.tournamentId, team.name, team.displayOrder, team.rosterLockedAt],
+        (id, tournament_id, name, display_order, status) VALUES (?, ?, ?, ?, ?)`,
+      args: [team.id, team.tournamentId, team.name, team.displayOrder, team.status],
     })),
     ...tournamentRosterEntries.map((entry) => ({
       sql: `INSERT INTO tournament_roster_entries

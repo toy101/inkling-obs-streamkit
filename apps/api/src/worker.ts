@@ -5,6 +5,7 @@ import { catalogDataSource, initializeRemoteCatalogStore } from "./catalog-store
 import { createApp } from "./create-app";
 import { createDataSource } from "./create-data-source";
 import { createD1StorageDataSource } from "./db/queries";
+import { createD1AdminDataSource } from "./db/admin-queries";
 import { createWorkerDatabase } from "./db/worker-client";
 import { parseHttpsOrigin, parseOriginList } from "./env";
 import { createWeaponImageEnricher } from "./weapon-images";
@@ -17,9 +18,10 @@ function createWorkerApp() {
   }
   const webOrigins = parseOriginList(workerEnv.CORS_ALLOWED_ORIGINS, "CORS_ALLOWED_ORIGINS");
   const imageOrigin = parseHttpsOrigin(workerEnv.IKACLO_API_ORIGIN, "IKACLO_API_ORIGIN");
+  const database = createWorkerDatabase(workerEnv.DB);
   const dataSource = createDataSource({
     storageDataSource: createD1StorageDataSource(
-      createWorkerDatabase(workerEnv.DB),
+      database,
       catalogDataSource,
     ),
     catalogDataSource,
@@ -29,6 +31,15 @@ function createWorkerApp() {
     dataSource,
     webOrigins,
     adapter: CloudflareAdapter,
+    admin: {
+      dataSource: createD1AdminDataSource(database, catalogDataSource),
+      token: workerEnv.ADMIN_API_TOKEN?.trim() ?? "",
+      origins: parseOriginList(
+        workerEnv.ADMIN_ALLOWED_ORIGINS ?? "http://localhost:5174,http://127.0.0.1:5174",
+        "ADMIN_ALLOWED_ORIGINS",
+      ),
+      environment: workerEnv.ADMIN_ENVIRONMENT ?? "production",
+    },
   }).compile();
 }
 

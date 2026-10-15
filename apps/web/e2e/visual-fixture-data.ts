@@ -23,7 +23,7 @@ const alphaTeam: TournamentTeam = {
   tournamentId: tournament.id,
   name: "ALPHA | Moonlit Long Form Streaming Team",
   displayOrder: 1,
-  rosterLockedAt: "2026-01-01T00:00:00.000Z",
+  status: "confirmed",
 };
 
 const bravoTeam: TournamentTeam = {
@@ -31,7 +31,7 @@ const bravoTeam: TournamentTeam = {
   tournamentId: tournament.id,
   name: "BRAVO | Midnight Broadcast Support Team",
   displayOrder: 2,
-  rosterLockedAt: "2026-01-01T00:00:00.000Z",
+  status: "confirmed",
 };
 
 const rule: Rule = {

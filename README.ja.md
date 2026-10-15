@@ -54,6 +54,45 @@ bun run dev:d1    # Web :5173 + API Worker :8787。ローカル D1 を参照
 
 `view` を付けずに開いた場合は、指定できる値を表示するだけ。
 
+## 管理アプリ
+
+`apps/admin` は大会・大会チーム・参加者を登録・更新する、ローカル専用の管理画面。大会名と状態、チームの表示順、最大4人の登録名と参加者の紐付け、参加者のアイコン・ポジション・最大4つの持ちブキを編集できる。参加者を紐付けず、登録名だけで大会へ参加させることもできる。チームの状態は4人未満なら「ドラフト」、4人揃うと「確定」へ自動で切り替わる。「非表示」を選ぶと、名簿や参加者データを残して Dock・Overlay の表示対象から外せる。非表示を解除すると人数から状態を再判定する。管理画面では全状態を編集でき、Dock・Overlay に表示できるのは確定チームだけ。
+
+1. `cp apps/admin/.env.example apps/admin/.env.local` を実行する。
+2. `apps/api/.env.local` の `ADMIN_API_TOKEN` に十分に長いランダムな値を設定する（例: `bun -e 'console.log(crypto.randomUUID())'` で生成）。
+3. ローカル D1 は `bun run dev:admin:local` で API Worker、Web、Admin を起動する。
+4. `http://127.0.0.1:5174` を開き、接続先が「ローカル D1」と表示されていることを確認し、同じ管理トークンを入力して接続する。
+
+```bash
+bun run dev:admin:local       # ローカル D1: API :8787 / Web :5173 / Admin :5174
+bun run dev:admin:production  # 本番 D1: ローカル API Worker :3000 / Web :5173 / Admin :5174
+```
+
+チーム状態の変更を使う前に、既存 D1 へ追加マイグレーションを適用する。ローカルは `dev:admin:local` の起動時に自動適用され、本番は API を停止して `bun run db:migrate:production` を実行してから再起動する。009 で状態列を追加し、010 で既存名簿の人数から状態を設定する。大会・チーム・参加者・名簿は削除しない。旧 `roster_locked_at` 列は互換性のため残るが、アプリの判定には使わない。既存 JSON の旧形式も人数から状態へ読み替える。
+
+本番接続では Wrangler の OAuth 認証と D1 バインディングを使う。Admin → ローカル API Worker → 本番 D1 の構成になり、API のコードを Cloudflare へデプロイせずに入力・更新できる。Cloudflare API トークンを手動発行する必要はない。次のコマンドはリポジトリのルートから実行する。
+
+1. 旧 HTTP 方式の認証・アカウント設定がある場合、ログイン前に `apps/api/.env.local` の `CLOUDFLARE_API_TOKEN`、`CLOUDFLARE_ACCOUNT_ID`、API key/email と `CF_` 別名を削除またはコメントアウトし、シェル環境からも `unset` する。`bun install` の後、`bun run cf:login` でブラウザからログインし、`bun run cf:whoami` で接続するアカウントを確認する。
+2. 初回だけ `cp apps/api/wrangler.production.example.toml apps/api/wrangler.production.toml` を実行する。コピー先の `account_id`、`env.production.d1_databases` の `database_name` と `database_id` を、本番 D1 の値へ置き換える。`remote = true` は維持する。ローカル専用の `wrangler.local.toml` はそのまま使う。
+3. `apps/api/.env.local` に `CATALOG_URL`、`IKACLO_API_ORIGIN`、`ADMIN_API_TOKEN` を設定する。カタログ URL と画像の origin は、既に使っている設定をそのまま利用できる。管理トークンは Cloudflare のログイン情報とは別で、Admin への接続に使う。旧 HTTP 方式の `CLOUDFLARE_API_TOKEN`、`CLOUDFLARE_ACCOUNT_ID`、`CF_` 別名などを `.env.local` やシェル環境から外す。本番コマンドは OAuth の接続先を上書きする設定が残っていると接続前に停止する。
+4. `bun run db:check:production` で対象 DB とマイグレーション履歴を確認する。続いて `bun run db:migrate:production` で未適用分を反映する。この段階から本番 DB を変更する。
+5. `bun run dev:admin:production` を実行する。設定から `apps/api/.dev.vars.production` を生成し、Wrangler のローカル API Worker を起動する。起動時にマイグレーションや開発データ投入は実行しない。
+6. `http://127.0.0.1:5174` を開き、接続先が「本番環境 D1」と表示されていることを確認し、`ADMIN_API_TOKEN` の値で接続する。参加者 → 大会 → チームを登録し、4人の名簿を揃えると確定チームになる。Cloudflare の D1 Console でも登録した行を確認できる。
+
+`db:migrate:production` は Wrangler 標準の `d1_migrations` に履歴を保存する。従来の `schema_migrations` がある場合は、既知の適用済みファイルを確認して履歴だけを引き継ぐ。履歴のない既存テーブルや未知のマイグレーションが見つかった場合は、自動適用を止める。設定ファイル・生成した秘密情報は Git 管理外に置く。
+
+接続先は起動時の `VITE_ADMIN_TARGET` で固定する。`dev:admin:local` はローカル、`dev:admin:production` は本番を指定し、画面には現在の環境と API URL を表示する。接続先 URL は Admin の `VITE_LOCAL_API_URL` と `VITE_PRODUCTION_API_URL` で設定できる。環境を変更するときは対応する起動コマンドで再起動する。画面は `/admin/status` で API が返す環境と起動設定を照合し、一致した接続でのみ保存を許可する。切断時は認証情報・表示データ・編集中の内容を解除する。
+
+管理トークンはブラウザのメモリだけで保持し、Cloudflare の認証情報は API プロセスだけに置く。`VITE_` 変数へトークンを設定しない。API は `ADMIN_ALLOWED_ORIGINS` の origin と Bearer トークンを検証し、トークン未設定または JSON モードでは管理操作を拒否する。公開 API Worker も管理トークン未設定なら管理操作を受け付けない。
+
+保存したデータは既存の Web API と Overlay が読む D1 の同じテーブルへ反映される。既に開いている Dock / Overlay に再取得させるには、そのページを再読み込みする。従来の `bun dev`、`dev:json`、`dev:d1` は Web と API だけを起動する。
+
+```bash
+bun run --filter admin lint
+bun run --filter admin build
+bun run --filter admin test:e2e
+```
+
 ## OBS の設定
 
 | 用途 | URL | サイズ |
@@ -81,6 +120,7 @@ bun run dev:d1    # Web :5173 + API Worker :8787。ローカル D1 を参照
 .
 ├── apps/
 │   ├── web/    Vite + React + TypeScript。Dock / Overlay / Debug。
+│   ├── admin/  ローカル専用の大会・チーム・参加者管理画面。
 │   └── api/    Bun または Worker 上の Elysia。ローカル JSON、D1 接続、マイグレーション、初期データ。
 ├── packages/   共通ドメイン型用の予約枠（現時点では空）
 └── cspell.json
@@ -93,13 +133,15 @@ bun run dev:d1    # Web :5173 + API Worker :8787。ローカル D1 を参照
 | `bun dev` | web と API を並列起動する。 |
 | `bun run dev:apps` | web と API を並列起動する。 |
 | `bun run --filter web dev` | 片方のワークスペースだけ起動する（`api` も同様）。 |
-| `bun run --filter web lint` | ESLint。lint 設定があるのは web のみ。 |
+| `bun run --filter web lint` | Web の ESLint。Admin は `--filter admin lint`。 |
 | `bun run --filter web build` | `tsc -b && vite build`。唯一の型チェック経路。 |
 | `bun run dev:json` | JSON 参照の Bun API と Web を起動する。 |
 | `bun run dev:d1` | ローカル D1 を準備し、API Worker と Web を起動する。 |
 | `bun run db:setup:local` | ローカル D1 に未適用のマイグレーションと初回データを投入する。 |
 | `bun run openapi:build` | APIを起動せず、実行時データも読み込まずに、`dist/openapi/` 以下へ静的な Scalar ビューアーと `openapi.yaml` を生成する。 |
-| `bun run db:migrate` | 設定した D1 に未適用の SQL マイグレーションを実行する。 |
+| `bun run cf:login` / `bun run cf:whoami` | Wrangler でログインし、Cloudflare のアカウントを確認する。 |
+| `bun run db:check:production` | 本番 D1 の接続先・テーブル・マイグレーション履歴を読み取り専用で確認する。 |
+| `bun run db:migrate:production` / `bun run db:migrate` | 本番設定の D1 に Wrangler で未適用マイグレーションを実行する。 |
 | `D1_SEED_DEVELOPMENT_DATA=1 bun run db:setup` | マイグレーションを実行し、JSON の開発データを一度だけ投入する。 |
 | `bun run spellcheck` | リポジトリ全体を cspell で検査する。辞書は `cspell.json`。 |
 
@@ -119,7 +161,7 @@ bun run --filter web test:e2e -- --update-snapshots
 
 コミット前に `apps/web/e2e/visual-regression.spec.ts-snapshots/` 以下の変更されたPNGを確認する。baselineはGitHub ActionsのUbuntu上のChromiumと同じ `chromium-linux` project（`*-chromium-linux.png`）だけを正とする。macOSやWindowsで生成したplatform別PNGは正規baselineにせず、更新は同じLinux Chromium環境で行う。Pull Requestの `web-smoke` workflow はテスト失敗時に `apps/web/test-results/` のactual screenshot、diff、traceと、Git管理しているexpected baselineをartifactとして保存する。このブラウザ検証はOBS CEFとの完全なピクセル一致を保証しない。OBS実機確認は別ゲートで行う。
 
-Pull Request では、クリーンな checkout 上で `quality` チェックを実行する。Bun 1.4.2 と frozen lockfile を使い、Git管理外の実行時パスには決定的なfixtureを用意してから、API の型チェック、web の lint、web の build、spellcheck を順に検査する。追跡対象の TypeScript アダプターとスキーマ SQL を使うため、`.env.local`、ローカル DB、CDN、イカクロ API には依存しない。
+Pull Request では、クリーンな checkout 上で `quality` チェックを実行する。Bun 1.4.2 と frozen lockfile を使い、Git管理外の実行時パスには決定的なfixtureを用意してから、API の型チェック、Web と Admin の lint/build、spellcheck を検査する。`admin-smoke` はモック API を使って管理画面の登録・更新と接続環境の照合を検証する。追跡対象の TypeScript アダプターとスキーマ SQL を使うため、`.env.local`、ローカル DB、CDN、イカクロ API には依存しない。
 
 ## APIリファレンス
 
@@ -144,21 +186,21 @@ Elysiaのルートスキーマから`@elysia/openapi`でOpenAPI文書を生成�
 
 Elysia のルートとレスポンススキーマはどちらのモードでも同じ。モデルが固まっていない間は JSON をすぐ編集でき、web 側を保存方式へ依存させずに済む。
 
-D1 を使うには Cloudflare でデータベースを作成し、Git 管理外の `apps/api/.env.local` に `API_DATA_SOURCE=d1`、`CLOUDFLARE_ACCOUNT_ID`、`D1_DATABASE_ID`、`CLOUDFLARE_API_TOKEN` を設定する。API の読み込みには D1 Read、マイグレーションやデータ投入には D1 Write 権限が必要。API は D1 の HTTP query API を呼び出し、トークンはブラウザへ渡さない。web と API を localhost で動かしても D1 はリモートにある。
+D1 を使う場合、ローカルは `dev:d1` または `dev:admin:local`、本番の入力・更新は上記の `dev:admin:production` を使う。どちらも API Worker の `DB` バインディングを利用する。本番の接続先は Git 管理外の `apps/api/wrangler.production.toml` で指定し、Wrangler で認証する。
 
 SQL マイグレーションは `apps/api/src/db/migrations/` に置く。空の D1 を作成した後とスキーマ変更時に `bun run db:migrate` を実行する。現在の JSON 開発データを空の D1 に投入する場合は、代わりに `D1_SEED_DEVELOPMENT_DATA=1 bun run db:setup` を実行する。seed のバージョンを記録して2回目以降は DB を上書きしないため、初回投入後に JSON を編集しても D1 には反映されない。
 
 **`API_DATA_SOURCE` を切り替えるだけでは既存の Turso データは移らない。** 元の SQLite データベース全体を SQL にエクスポートし、D1 が要求する `BEGIN TRANSACTION` と `COMMIT` の行を除いてから、*空の新規 D1* へ `wrangler d1 execute <DATABASE_NAME> --remote --file=<DUMP.sql>` でインポートする。全体の dump なら `schema_migrations` と `seed_history` も含まれるため、移行先で先に `db:migrate` や `db:setup` を実行しない。切替前に各テーブルの件数を比較し、確認が済むまでは元の Turso データを残す。dump は Git 管理外に保管する。詳細は [Cloudflare のインポート手順](https://developers.cloudflare.com/d1/best-practices/import-export-data/) を参照。
 
-ローカルの Bun API は、マイグレーション・seed コマンドを含め、`d1` モードでは引き続き D1 HTTP query API を使う。API Worker はリクエスト時に `DB` D1 バインディングを使い、Cloudflare API トークンを必要としない。Cloudflare も [REST API は主に管理用途向け](https://developers.cloudflare.com/d1/tutorials/build-an-api-to-access-d1/) としている。
+旧 Bun API の `API_DATA_SOURCE=d1` アダプターも残っているが、これは D1 HTTP query API と `CLOUDFLARE_ACCOUNT_ID`、`D1_DATABASE_ID`、`CLOUDFLARE_API_TOKEN` を使う別経路。現在の本番 Admin 起動・マイグレーション・seed コマンドはこの経路を使わず、Wrangler に統一している。
 
 ## Web と API を別々の Cloudflare Worker に配置する準備
 
 `apps/api/src/worker.ts` は Bun 版と同じ Elysia のルート・レスポンス型を、[Elysia の実験的 Cloudflare アダプター](https://elysiajs.com/integrations/cloudflare-worker)で動かす入口。`apps/api/wrangler.local.toml` はローカル開発専用で、デプロイには使わない。`apps/web/wrangler.toml.example` は Vite の成果物を静的配信し、`apps/api/wrangler.toml.example` は既存の D1 をバインドする本番向け設定例。配置前にそれぞれ `wrangler.toml` へコピーし、プレースホルダーを置き換える。JSON 開発コマンドは Wrangler を使わない。
 
-1. 上記の手順で D1 を作成または移行し、API の Wrangler 設定へ**既存の**データベース名と ID を記入する。API Worker は `DB` バインディングを使用する。`CLOUDFLARE_API_TOKEN` が必要なのは、別プロセスの Bun マイグレーション・seed コマンドとローカル Bun の `d1` モードだけ。
+1. 上記の手順で D1 を作成または移行し、API の Wrangler 設定へ**既存の**データベース名と ID を記入する。API Worker は `DB` バインディングを使用する。本番 Admin 用の設定と、公開 API の設定には同じ D1 を指定する。公開 API には `ADMIN_API_TOKEN` を設定せず、管理操作はローカル API で行う。
 2. API 設定の `CATALOG_URL` と `IKACLO_API_ORIGIN` を設定し、`CORS_ALLOWED_ORIGINS` に最終的な Web Worker の origin を指定する。scheme を含む正確な origin が必要。複数ある場合はカンマで区切る。
-3. `apps/api/` から `bunx wrangler deploy --config wrangler.toml` で API を配置する。Web のビルド**前**に、例えば `apps/web/.env.production` の `VITE_API_URL` を API Worker の URL に設定する。リポジトリのルートで `bun run --filter web build` を実行し、`apps/web/` から `bunx wrangler deploy --config wrangler.toml` で Web を配置する。
+3. `apps/api/` から `bunx wrangler@4.136.3 deploy --config wrangler.toml` で API を配置する。Web のビルド**前**に、例えば `apps/web/.env.production` の `VITE_API_URL` を API Worker の URL に設定する。リポジトリのルートで `bun run --filter web build` を実行し、`apps/web/` から `bunx wrangler@4.136.3 deploy --config wrangler.toml` で Web を配置する。
 4. 配置後の Debug と Overlay を開いて API 通信・CORS を確認し、OBS ブラウザソースも別途確認する。`BroadcastChannel` と `localStorage` のため、Dock・Debug・Overlay は同じ **Web** origin に置く。API は別 origin でよい。
 
 API Worker は起動した isolate ごとに `CATALOG_URL` から3つのカタログを一度取得・検証し、メモリに保持する。取得失敗時は初期化中のリクエストに HTTP 503 を返し、次のリクエストで再試行する。このためコールドスタート時の可用性は CDN に依存する。Bun API は従来どおり Git 管理外のローカルカタログを読む。Vite の `_headers` は Cloudflare の静的アセットへ同一 origin iframe とセキュリティヘッダーを引き継ぐ。開発・プレビューサーバーでは引き続き `vite.config.ts` を使う。
