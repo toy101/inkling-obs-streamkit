@@ -51,11 +51,12 @@ Fetch and execute the appropriate instructions to set me up for Cloudflare from 
 
 `main.tsx` は同じ値を `document.documentElement.dataset.view` にも複製する。CSS 側は `html[data-view="overlay"]` で分岐できる（`index.css`）。ビューを追加するときは App.tsx の switch と dataset 依存 CSS の両方を確認する。
 
-### 型は API から web へ直接流れる（Eden Treaty）
+### 型は API から Web・Admin へ直接流れる（Eden Treaty）
 
-- `apps/api/src/index.ts` が `export type App = typeof app` と `export type Player` を公開する。
-- `apps/web/src/lib/api.ts` が `treaty<App>("http://localhost:3000")` を作る。Eden Treaty 2 の `treaty` を使い、旧 `edenTreaty` は使わない。
-- web は workspace 境界を越えて相対パス `../../../api/src` から型を import する。パッケージ名やエイリアスは介さない。**API のルートやレスポンス型を変えると web 側の型が即座に変わる**ので、片方だけ直して終わりにしない。
+- `App` 型の公開元は `apps/api/src/create-app.ts` の `export type App = ReturnType<typeof createApp>`。ルート定義から推論した戻り値型を使い、API の型を手書きで複製しない。
+- `apps/web/src/lib/api.ts` と `apps/admin/src/lib/api.ts` は workspace 境界を越えて相対パス `../../../api/src/create-app` から `App` を `import type` する。パッケージ名やエイリアスは介さない。**API のルートやレスポンス型を変えると Web・Admin 側の型が即座に変わる**ので、利用側も確認する。
+- `apps/api/src/app.ts` と `apps/api/src/index.ts` は実際のデータソースや起動処理に依存するため、`App` の型参照の入口にしない。型チェックが Git 管理外の `players.json` / `tournaments.json` に依存しない構造を保つ。プロジェクト内の利用側は直接参照へ更新済みで、外部利用もないため、旧入口からの互換用 `App` 再エクスポートは持たない。`index.ts` の `Player` 型の公開は別用途として残る。
+- Web は `treaty<App>(readApiUrl(import.meta.env.VITE_API_URL))` でクライアントを作る。Eden Treaty 2 の `treaty` を使い、旧 `edenTreaty` は使わない。
 - HTTP は `fetch` ではなく `api.players.get()` / `api.players({ id }).get()` を使う。戻り値は `{ data, error }` 形式。
 
 ### Dock → Overlay の状態同期
