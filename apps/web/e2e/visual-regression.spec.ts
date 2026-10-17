@@ -315,7 +315,7 @@ test("OverlayのBRAVO詳細は長い選手名と画像フォールバックを�
   ).toHaveScreenshot("overlay-bravo-detail.png", screenshotOptions);
 });
 
-test("ポジション非表示でも両チームの長い選手名を省略表示する", async ({
+test("ポジション非表示でも両チームの長い選手名を枠内に全文表示する", async ({
   page,
   api,
 }) => {
@@ -326,9 +326,17 @@ test("ポジション非表示でも両チームの長い選手名を省略表�
   await toggle.click();
   await expect(toggle).toHaveAttribute("aria-pressed", "false");
 
-  for (const { name, selector } of [
-    { name: "アルファチーム 詳細", selector: ".overlay-team-detail--left" },
-    { name: "ブラボーチーム 詳細", selector: ".overlay-team-detail--right" },
+  for (const { name, selector, players } of [
+    {
+      name: "アルファチーム 詳細",
+      selector: ".overlay-team-detail--left",
+      players: visualFixtureData.matchup.alpha.players,
+    },
+    {
+      name: "ブラボーチーム 詳細",
+      selector: ".overlay-team-detail--right",
+      players: visualFixtureData.matchup.bravo.players,
+    },
   ]) {
     await page.getByRole("button", { name, exact: true }).click();
     await expect(
@@ -337,7 +345,21 @@ test("ポジション非表示でも両チームの長い選手名を省略表�
     const names = overlay.locator(
       ".overlay-slide.is-active .overlay-detail-player-profile strong",
     );
-    await expect(names).toHaveCount(4);
+    await expect(names).toHaveText(players.map((player) => player.registeredName));
+    await expect(
+      overlay.locator(".overlay-slide.is-active .overlay-detail-position:visible"),
+    ).toHaveCount(0);
+    await expect.poll(() => names.evaluateAll((elements) =>
+      elements.every((element) => {
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        const text = range.getBoundingClientRect();
+        const container = element.getBoundingClientRect();
+        return text.width > 0 &&
+          text.left >= container.left - 0.5 &&
+          text.right <= container.right + 0.5;
+      }),
+    )).toBe(true);
     const nameMetrics = await names.evaluateAll((elements) =>
       elements.map((element) => {
         const style = getComputedStyle(element);
@@ -354,10 +376,10 @@ test("ポジション非表示でも両チームの長い選手名を省略表�
     for (const metrics of nameMetrics) {
       expect(metrics.display).toBe("block");
       expect(metrics.overflow).toBe("hidden");
-      expect(metrics.textOverflow).toBe("ellipsis");
+      expect(metrics.textOverflow).not.toBe("ellipsis");
       expect(metrics.width).toBeGreaterThan(0);
       expect(metrics.width).toBeLessThanOrEqual(metrics.profileWidth);
-      expect(metrics.textWidth).toBeGreaterThan(metrics.width);
+      expect(metrics.textWidth).toBeLessThanOrEqual(metrics.width + 1);
     }
   }
 });

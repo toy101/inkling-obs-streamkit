@@ -215,6 +215,51 @@ test("Debugのスライド操作とBRAVO画像の遅延読み込みを検証す�
   expect(api.requestCount("/overlay/matchup")).toBe(1);
 });
 
+test("Debugは対戦データの取得前に停止した自動切替をOverlayへ同期する", async ({
+  page,
+  api,
+}) => {
+  let releaseMatchup = () => {};
+  const matchupResponse = new Promise<void>((resolve) => {
+    releaseMatchup = resolve;
+  });
+  await page.route("**/overlay/matchup?**", async (route) => {
+    await matchupResponse;
+    await route.fallback();
+  });
+  await installStoredSelection(page);
+
+  try {
+    const matchupRequest = page.waitForRequest("**/overlay/matchup?**");
+    await page.goto("/?view=debug");
+    await matchupRequest;
+    const overlay = page.frameLocator(overlayFrameSelector);
+    const carousel = overlay.locator(".overlay-carousel");
+    await expect(carousel).toHaveCount(0);
+
+    const autoplayButton = page.getByRole("button", { name: /自動切替:/ });
+    await autoplayButton.click();
+    await expect(autoplayButton).toHaveAttribute("aria-pressed", "false");
+    releaseMatchup();
+
+    await expect(carousel).toHaveAttribute("data-autoplay", "false");
+    await expect(carousel).toHaveClass(/is-paused/);
+    expect(api.requestCount("/overlay/matchup")).toBe(1);
+
+    await page.locator(overlayFrameSelector).evaluate((element) => {
+      const frame = element as HTMLIFrameElement;
+      frame.contentWindow?.location.reload();
+    });
+    await expect.poll(() => api.requestCount("/overlay/matchup")).toBe(2);
+    await expect(carousel).toHaveAttribute("data-autoplay", "false");
+
+    await autoplayButton.click();
+    await expect(carousel).toHaveAttribute("data-autoplay", "true");
+  } finally {
+    releaseMatchup();
+  }
+});
+
 test("ポジション表示を切り替えても両チームのブキ配置を維持し、再読込後も復元する", async ({
   page,
   api,

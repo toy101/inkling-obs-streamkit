@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 
+import { PLAYER_NAME_MAX_LENGTH } from '../../../api/src/models/player-name'
 import type { AdminApi, PlayerInput, PlayerProfile, Position, Weapon } from '../lib/api'
 import { errorMessage } from '../lib/api'
 
@@ -64,6 +65,10 @@ export function PlayerPanel({ api, players, positions, weapons, onBusyChange, on
     const duplicateWeapons = new Set(form.weaponIds).size !== form.weaponIds.length
     if (!displayName) {
       setMessage({ kind: 'error', text: '参加者名を入力してください。' })
+      return
+    }
+    if (displayName.length > PLAYER_NAME_MAX_LENGTH) {
+      setMessage({ kind: 'error', text: `参加者名は${PLAYER_NAME_MAX_LENGTH}文字以内で入力してください。` })
       return
     }
     if (duplicateWeapons) {
@@ -144,7 +149,7 @@ export function PlayerPanel({ api, players, positions, weapons, onBusyChange, on
           <div className="form-grid two-columns">
             <label className="field">
               <span>参加者名 <b>必須</b></span>
-              <input value={form.displayName} maxLength={100} onChange={(event) => setForm({ ...form, displayName: event.target.value })} />
+              <input value={form.displayName} maxLength={PLAYER_NAME_MAX_LENGTH} onChange={(event) => setForm({ ...form, displayName: event.target.value })} />
             </label>
             <label className="field">
               <span>ポジション</span>
