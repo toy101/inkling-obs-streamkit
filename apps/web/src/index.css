@@ -1131,10 +1131,6 @@ html[data-view="overlay"] body {
   letter-spacing: 0.16em;
 }
 
-.overlay-team-detail.is-position-hidden .overlay-detail-columns {
-  grid-template-columns: 484px minmax(0, 1fr);
-}
-
 .overlay-detail-columns span:last-child {
   padding-left: 32px;
 }
@@ -1174,10 +1170,6 @@ html[data-view="overlay"] body {
   -webkit-backdrop-filter: none;
 }
 
-.overlay-team-detail.is-position-hidden .overlay-detail-player {
-  grid-template-columns: 104px 360px minmax(0, 1fr);
-}
-
 .overlay-detail-player .overlay-player-avatar {
   width: 104px;
   height: 104px;
@@ -1198,10 +1190,6 @@ html[data-view="overlay"] body {
   white-space: nowrap;
 }
 
-.overlay-detail-player-profile.is-position-hidden strong {
-  display: contents;
-}
-
 .overlay-detail-position {
   justify-self: start;
   max-width: 100%;
@@ -1219,12 +1207,7 @@ html[data-view="overlay"] body {
 }
 
 .overlay-detail-position.is-position-hidden {
-  justify-self: start;
-  max-width: 100%;
-  overflow: hidden;
-  padding: 8px 16px;
-  background: rgb(0 0 0 / 0);
-  border: 1px solid rgb(0 0 0 / 0);
+  visibility: hidden;
 }
 
 .overlay-detail-weapons {

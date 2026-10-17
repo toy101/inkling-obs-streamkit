@@ -267,13 +267,14 @@ function TeamDetailSlide({
           <li className="overlay-detail-player" key={player.rosterEntryId}>
             <PlayerAvatar player={player} />
 
-            <div
-              className={`overlay-detail-player-profile${positionClassName}`}
-            >
+            <div className="overlay-detail-player-profile">
               <strong>{player.registeredName}</strong>
             </div>
 
-            <span className={`overlay-detail-position${positionClassName}`}>
+            <span
+              className={`overlay-detail-position${positionClassName}`}
+              aria-hidden={!showPositions}
+            >
               {showPositions ? (player.position?.name ?? "Unknown") : ""}
             </span>
 

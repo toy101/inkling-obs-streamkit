@@ -315,6 +315,53 @@ test("OverlayのBRAVO詳細は長い選手名と画像フォールバックを�
   ).toHaveScreenshot("overlay-bravo-detail.png", screenshotOptions);
 });
 
+test("ポジション非表示でも両チームの長い選手名を省略表示する", async ({
+  page,
+  api,
+}) => {
+  await prepareVisualPage(page);
+  const overlay = await getReadyOverlay(page, api);
+
+  const toggle = page.getByRole("button", { name: /ポジション表示:/ });
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+
+  for (const { name, selector } of [
+    { name: "アルファチーム 詳細", selector: ".overlay-team-detail--left" },
+    { name: "ブラボーチーム 詳細", selector: ".overlay-team-detail--right" },
+  ]) {
+    await page.getByRole("button", { name, exact: true }).click();
+    await expect(
+      overlay.locator(`.overlay-slide.is-active ${selector}`),
+    ).toBeVisible();
+    const names = overlay.locator(
+      ".overlay-slide.is-active .overlay-detail-player-profile strong",
+    );
+    await expect(names).toHaveCount(4);
+    const nameMetrics = await names.evaluateAll((elements) =>
+      elements.map((element) => {
+        const style = getComputedStyle(element);
+        return {
+          display: style.display,
+          overflow: style.overflow,
+          textOverflow: style.textOverflow,
+          width: element.clientWidth,
+          textWidth: element.scrollWidth,
+          profileWidth: element.parentElement?.clientWidth ?? 0,
+        };
+      }),
+    );
+    for (const metrics of nameMetrics) {
+      expect(metrics.display).toBe("block");
+      expect(metrics.overflow).toBe("hidden");
+      expect(metrics.textOverflow).toBe("ellipsis");
+      expect(metrics.width).toBeGreaterThan(0);
+      expect(metrics.width).toBeLessThanOrEqual(metrics.profileWidth);
+      expect(metrics.textWidth).toBeGreaterThan(metrics.width);
+    }
+  }
+});
+
 test("Overlayのステージ紹介は安定したplayingフェーズを表示する", async ({
   page,
   api,
