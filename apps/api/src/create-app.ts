@@ -87,3 +87,5 @@ export function createApp({ dataSource, webOrigins, admin, adapter }: CreateAppO
       },
     );
 }
+
+export type App = ReturnType<typeof createApp>;
