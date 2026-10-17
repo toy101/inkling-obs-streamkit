@@ -17,5 +17,3 @@ export const app = createApp({
     environment: "production",
   },
 });
-
-export type App = typeof app;

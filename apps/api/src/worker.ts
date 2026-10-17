@@ -13,12 +13,16 @@ import { createWeaponImageEnricher } from "./weapon-images";
 const workerEnv = env;
 
 function createWorkerApp() {
-  if (typeof workerEnv.DB?.prepare !== "function") {
-    throw new Error("The DB D1 binding is required.");
-  }
   const webOrigins = parseOriginList(workerEnv.CORS_ALLOWED_ORIGINS, "CORS_ALLOWED_ORIGINS");
   const imageOrigin = parseHttpsOrigin(workerEnv.IKACLO_API_ORIGIN, "IKACLO_API_ORIGIN");
-  const database = createWorkerDatabase(workerEnv.DB);
+  const database = createWorkerDatabase({
+    prepare(sql) {
+      return workerEnv.DB.prepare(sql);
+    },
+    batch(statements) {
+      return workerEnv.DB.batch(statements);
+    },
+  });
   const dataSource = createDataSource({
     storageDataSource: createD1StorageDataSource(
       database,
@@ -48,6 +52,13 @@ let catalogPromise: Promise<void> | null = null;
 
 export default {
   async fetch(request: Request): Promise<Response> {
+    if (typeof workerEnv.DB?.prepare !== "function") {
+      console.error("The DB D1 binding is required.");
+      return new Response("API database binding is unavailable.", {
+        status: 503,
+      });
+    }
+
     catalogPromise ??= initializeRemoteCatalogStore(workerEnv.CATALOG_URL);
     try {
       await catalogPromise;

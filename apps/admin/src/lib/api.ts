@@ -1,6 +1,6 @@
 import { treaty } from '@elysia/eden'
 
-import type { App } from '../../../api/src/app'
+import type { App } from '../../../api/src/create-app'
 import type { Position, Weapon } from '../../../api/src/models/catalog'
 import type { PlayerInput, PlayerProfile } from '../../../api/src/models/player'
 import type { Tournament } from '../../../api/src/models/tournament'
