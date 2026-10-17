@@ -107,7 +107,7 @@ Keep Chrome's page zoom at 100% when comparing the preview against OBS, and do n
 - The overlay always renders at **1920 × 1080 px (16:9)**.
 - Debug loads the real `?view=overlay` page in an iframe of exactly that size and shrinks it only with `transform: scale()` on the wrapper. Viewport, `rem` and media query conditions therefore match the production page.
 - Zoom is either "fit" or 25 / 50 / 75 / 100%. Auto fit never scales above 100%. When a manual zoom does not fit, the preview area scrolls.
-- The toolbar can immediately switch the iframe preview to the matchup, either team detail, or next-match rule/stage slide. This is Debug-only and does not alter the OBS Browser Source.
+- The toolbar switches the iframe preview to the matchup or either team detail. “ステージ・ルール紹介” plays the reveal transition, then loops the background video with the applied rule and stage displayed. Select another scene button to stop the preview. These controls are Debug-only and do not alter the OBS Browser Source.
 - The toolbar reports canvas size, aspect ratio, current scale and the scaled display size.
 - The checkerboard behind the overlay exists to verify transparency; it is not part of the stream.
 - The Dock and the iframe stay in sync through a same-origin `BroadcastChannel`, the same path the Dock and the Browser Source use in OBS. `localStorage` only restores the latest selection when a page loads.

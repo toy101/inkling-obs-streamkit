@@ -5,6 +5,7 @@ import {
   DEBUG_OVERLAY_AUTOPLAY_MESSAGE,
   DEBUG_OVERLAY_SLIDES,
   DEBUG_OVERLAY_SLIDE_MESSAGE,
+  DEBUG_OVERLAY_STAGE_REVEAL_MESSAGE,
 } from "../lib/debug-overlay-preview";
 import type { DebugOverlaySlideIndex } from "../lib/debug-overlay-preview";
 import { Dock } from "./Dock";
@@ -69,6 +70,13 @@ export function Debug() {
     );
   };
 
+  const showStageReveal = () => {
+    overlayFrameRef.current?.contentWindow?.postMessage(
+      { type: DEBUG_OVERLAY_STAGE_REVEAL_MESSAGE },
+      window.location.origin,
+    );
+  };
+
   return (
     <div className="debug">
       <aside className="debug-dock" aria-label="表示コントローラー">
@@ -91,6 +99,13 @@ export function Debug() {
                   {label}
                 </button>
               ))}
+              <button
+                disabled={!isOverlayFrameLoaded}
+                onClick={showStageReveal}
+                type="button"
+              >
+                ステージ・ルール紹介
+              </button>
               <button
                 aria-pressed={isAutoplayEnabled}
                 className="debug-slide-autoplay"

@@ -6,6 +6,7 @@ import {
   DEBUG_OVERLAY_SLIDES,
   isDebugOverlayAutoplayMessage,
   isDebugOverlaySlideMessage,
+  isDebugOverlayStageRevealMessage,
 } from "../lib/debug-overlay-preview";
 import type { DebugOverlaySlideIndex } from "../lib/debug-overlay-preview";
 
@@ -468,7 +469,12 @@ type LoadedMatchup = {
 
 type StageRevealPhase = "ready" | "entering" | "playing" | "exiting";
 
+type OverlayStageRevealRequest = StageRevealRequest & {
+  loop: boolean;
+};
+
 type StageRevealPlayback = {
+  loop: boolean;
   requestId: string;
   rule: OverlayMatchup["rule"];
   sourceUrl: string;
@@ -511,7 +517,7 @@ export function Overlay() {
   const [selection, setSelection] = useState(getOverlaySelection);
   const [loaded, setLoaded] = useState<LoadedMatchup | null>(null);
   const [stageRevealRequest, setStageRevealRequest] =
-    useState<StageRevealRequest | null>(null);
+    useState<OverlayStageRevealRequest | null>(null);
   const [stageRevealPlayback, setStageRevealPlayback] =
     useState<StageRevealPlayback | null>(null);
   const stageRevealVideoRef = useRef<HTMLVideoElement>(null);
@@ -552,8 +558,42 @@ export function Overlay() {
   }, []);
 
   useEffect(() => {
-    return subscribeStageReveal(setStageRevealRequest);
+    return subscribeStageReveal((request) =>
+      setStageRevealRequest({ ...request, loop: false }),
+    );
   }, []);
+
+  useEffect(() => {
+    const receiveDebugStageReveal = (event: MessageEvent<unknown>) => {
+      if (
+        window.parent === window ||
+        event.source !== window.parent ||
+        event.origin !== window.location.origin
+      ) {
+        return;
+      }
+
+      if (isDebugOverlaySlideMessage(event.data)) {
+        setStageRevealRequest((current) => current?.loop ? null : current);
+        setStageRevealPlayback((current) => current?.loop ? null : current);
+        return;
+      }
+
+      if (!isDebugOverlayStageRevealMessage(event.data) || !ruleId || !stageId) {
+        return;
+      }
+
+      setStageRevealRequest({
+        requestId: crypto.randomUUID(),
+        ruleId,
+        stageId,
+        loop: true,
+      });
+    };
+
+    window.addEventListener("message", receiveDebugStageReveal);
+    return () => window.removeEventListener("message", receiveDebugStageReveal);
+  }, [ruleId, stageId]);
 
   useEffect(() => {
     if (!stageRevealRequest || !stageRevealMatchupIsLoaded) {
@@ -575,7 +615,9 @@ export function Overlay() {
     let objectUrl: string | null = null;
 
     const clearPlaybackTimeoutId = window.setTimeout(
-      () => setStageRevealPlayback(null),
+      () => setStageRevealPlayback((current) =>
+        current?.requestId === stageRevealRequest.requestId ? current : null,
+      ),
       0,
     );
 
@@ -597,6 +639,7 @@ export function Overlay() {
 
         objectUrl = URL.createObjectURL(videoBlob);
         setStageRevealPlayback({
+          loop: stageRevealRequest.loop,
           requestId: stageRevealRequest.requestId,
           rule: stageRevealMatchup.rule,
           sourceUrl: objectUrl,
@@ -800,9 +843,10 @@ export function Overlay() {
         <div className={`overlay-stage-reveal is-${stageRevealPlayback.phase}`}>
           <video
             aria-label="選択ステージ紹介動画"
+            loop={stageRevealPlayback.loop}
             onEnded={() =>
               setStageRevealPlayback((current) =>
-                current ? { ...current, phase: "exiting" } : current,
+                current && !current.loop ? { ...current, phase: "exiting" } : current,
               )
             }
             onError={() => {
