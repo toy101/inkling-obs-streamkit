@@ -574,10 +574,7 @@ export function Overlay() {
       console.error(
         "ステージ紹介に必要なルール・ステージ情報を取得できませんでした",
       );
-      const timeoutId = window.setTimeout(
-        () => setStageRevealRequest(null),
-        0,
-      );
+      const timeoutId = window.setTimeout(() => setStageRevealRequest(null), 0);
       return () => window.clearTimeout(timeoutId);
     }
 
@@ -855,9 +852,7 @@ export function Overlay() {
                 MAP // LOCKED
               </span>
               <strong>Next Stage</strong>
-              <span className="overlay-stage-transition-meta">
-                Coming Soon
-              </span>
+              <span className="overlay-stage-transition-meta">Coming Soon</span>
             </div>
           </div>
         </div>
