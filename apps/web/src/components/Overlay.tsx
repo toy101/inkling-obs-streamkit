@@ -4,6 +4,7 @@ import type { CSSProperties } from "react";
 import { OverlayName } from "./OverlayName";
 import { OVERLAY_HEIGHT, OVERLAY_WIDTH } from "../lib/overlay-canvas";
 import {
+  DEBUG_OVERLAY_READY_MESSAGE,
   DEBUG_OVERLAY_SLIDES,
   isDebugOverlayAutoplayMessage,
   isDebugOverlaySlideMessage,
@@ -407,6 +408,12 @@ function OverlayCarousel({
     };
 
     window.addEventListener("message", receiveDebugSlide);
+    if (window.parent !== window) {
+      window.parent.postMessage(
+        { type: DEBUG_OVERLAY_READY_MESSAGE },
+        window.location.origin,
+      );
+    }
     return () => window.removeEventListener("message", receiveDebugSlide);
   }, []);
 

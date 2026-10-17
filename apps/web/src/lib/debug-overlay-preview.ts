@@ -7,6 +7,7 @@ export const DEBUG_OVERLAY_SLIDES = [
 export const DEBUG_OVERLAY_SLIDE_MESSAGE = "inkling:debug-overlay-slide";
 export const DEBUG_OVERLAY_AUTOPLAY_MESSAGE =
   "inkling:debug-overlay-autoplay";
+export const DEBUG_OVERLAY_READY_MESSAGE = "inkling:debug-overlay-ready";
 
 export type DebugOverlaySlideIndex =
   (typeof DEBUG_OVERLAY_SLIDES)[number]["index"];
@@ -19,6 +20,10 @@ export type DebugOverlaySlideMessage = {
 export type DebugOverlayAutoplayMessage = {
   autoplay: boolean;
   type: typeof DEBUG_OVERLAY_AUTOPLAY_MESSAGE;
+};
+
+export type DebugOverlayReadyMessage = {
+  type: typeof DEBUG_OVERLAY_READY_MESSAGE;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -49,4 +54,10 @@ export function isDebugOverlayAutoplayMessage(
     value.type === DEBUG_OVERLAY_AUTOPLAY_MESSAGE &&
     typeof value.autoplay === "boolean"
   );
+}
+
+export function isDebugOverlayReadyMessage(
+  value: unknown,
+): value is DebugOverlayReadyMessage {
+  return isRecord(value) && value.type === DEBUG_OVERLAY_READY_MESSAGE;
 }
