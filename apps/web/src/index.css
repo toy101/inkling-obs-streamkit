@@ -1198,6 +1198,10 @@ html[data-view="overlay"] body {
   white-space: nowrap;
 }
 
+.overlay-detail-player-profile.is-position-hidden strong {
+  display: contents;
+}
+
 .overlay-detail-position {
   justify-self: start;
   max-width: 100%;
@@ -1212,6 +1216,15 @@ html[data-view="overlay"] body {
   background: rgb(var(--overlay-accent-rgb) / 18%);
   border: 1px solid rgb(var(--overlay-accent-rgb) / 50%);
   border-radius: 999px;
+}
+
+.overlay-detail-position.is-position-hidden {
+  justify-self: start;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 8px 16px;
+  background: rgb(0 0 0 / 0);
+  border: 1px solid rgb(0 0 0 / 0);
 }
 
 .overlay-detail-weapons {

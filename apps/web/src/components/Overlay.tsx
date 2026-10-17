@@ -248,7 +248,7 @@ function TeamDetailSlide({
 
   return (
     <section
-      className={`overlay-team-detail overlay-team-detail--${position}${positionClassName}`}
+      className={`overlay-team-detail overlay-team-detail--${position}`}
       aria-label={`${team.name}の詳細情報`}
     >
       <header className="overlay-slide-header">
@@ -258,7 +258,7 @@ function TeamDetailSlide({
 
       <div className="overlay-detail-columns" aria-hidden="true">
         <span>PLAYER</span>
-        {showPositions && <span>POSITION</span>}
+        <span>{showPositions ? "POSITION" : ""}</span>
         <span>WEAPONS</span>
       </div>
 
@@ -267,15 +267,15 @@ function TeamDetailSlide({
           <li className="overlay-detail-player" key={player.rosterEntryId}>
             <PlayerAvatar player={player} />
 
-            <div className="overlay-detail-player-profile">
+            <div
+              className={`overlay-detail-player-profile${positionClassName}`}
+            >
               <strong>{player.registeredName}</strong>
             </div>
 
-            {showPositions && (
-              <span className="overlay-detail-position">
-                {player.position?.name ?? "Unknown"}
-              </span>
-            )}
+            <span className={`overlay-detail-position${positionClassName}`}>
+              {showPositions ? (player.position?.name ?? "Unknown") : ""}
+            </span>
 
             <div className="overlay-detail-weapons">
               <ul>
