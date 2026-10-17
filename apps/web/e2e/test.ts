@@ -47,6 +47,9 @@ export type InstalledApiMock = ApiMock & {
 
 export type InstallApiMockOptions = {
   readonly fixtures?: FixtureData;
+  readonly matchupForQuery?: (
+    query: OverlayMatchupRequest["query"],
+  ) => FixtureData["matchup"];
 };
 
 function errorMessage(error: unknown): string {
@@ -197,7 +200,10 @@ export async function installApiMock(
           query: matchupQuery(url),
         };
         matchupRequests.push(overlayRequest);
-        await fulfillJson(route, fixtures.matchup);
+        await fulfillJson(
+          route,
+          options.matchupForQuery?.(overlayRequest.query) ?? fixtures.matchup,
+        );
         return;
       }
     }
