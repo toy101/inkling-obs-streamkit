@@ -7,7 +7,6 @@ import {
 import { initializeCatalogStore } from "./catalog-store";
 
 export { app } from "./app";
-export type { App } from "./app";
 export type { Player } from "./models/player";
 
 await initializeCatalogStore();

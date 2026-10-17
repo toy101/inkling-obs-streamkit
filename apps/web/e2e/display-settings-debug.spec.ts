@@ -10,6 +10,7 @@ const expectedSelection = {
   stageId: "stage-1",
   accentColor: "#8b5cf6",
   matchLabel: "",
+  showPositions: true,
 };
 
 const overlayFrameSelector =
@@ -38,6 +39,30 @@ async function readAccentColor(overlayRoot: Locator): Promise<string> {
       .trim()
       .toLowerCase(),
   );
+}
+
+async function readWeaponLayout(slide: Locator) {
+  return slide
+    .locator(
+      ".overlay-detail-columns span:last-child, .overlay-detail-weapons, .overlay-detail-weapon",
+    )
+    .evaluateAll((elements) =>
+      elements.map((element) => {
+        const { x, y, width, height } = element.getBoundingClientRect();
+        return { x, y, width, height };
+      }),
+    );
+}
+
+async function expectPositionsHidden(slide: Locator): Promise<void> {
+  await expect(slide.locator(".overlay-detail-position")).toHaveText([
+    "",
+    "",
+    "",
+    "",
+  ]);
+  await expect(slide.locator(".overlay-detail-position:visible")).toHaveCount(0);
+  await expect(slide.getByText("POSITION", { exact: true })).toHaveCount(0);
 }
 
 test("表示設定は明示的な反映時だけOverlayへ通知する", async ({
@@ -233,4 +258,89 @@ test("Debugは対戦データの取得前に停止した自動切替をOverlay�
   } finally {
     releaseMatchup();
   }
+});
+
+test("ポジション表示を切り替えても両チームのブキ配置を維持し、再読込後も復元する", async ({
+  page,
+  api,
+}) => {
+  await page.clock.install();
+  await page.goto("/");
+  await page.evaluate((selection) => {
+    localStorage.setItem("inkling:overlay-selection", JSON.stringify(selection));
+  }, expectedSelection);
+  await page.goto("/?view=debug");
+
+  const dock = page.getByRole("complementary", {
+    name: "表示コントローラー",
+  });
+  const overlay = page.frameLocator(overlayFrameSelector);
+  const activeSlide = overlay.locator(".overlay-slide.is-active");
+  const toggle = dock.getByRole("button", { name: /ポジション表示:/ });
+
+  await expect.poll(() => api.matchupRequests().length).toBe(1);
+  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  const layouts: {
+    name: string;
+    selector: string;
+    weapons: Awaited<ReturnType<typeof readWeaponLayout>>;
+  }[] = [];
+  for (const { name, selector } of [
+    { name: "アルファチーム 詳細", selector: ".overlay-team-detail--left" },
+    { name: "ブラボーチーム 詳細", selector: ".overlay-team-detail--right" },
+  ]) {
+    await page.getByRole("button", { name, exact: true }).click();
+    await expect(activeSlide.locator(selector)).toBeVisible();
+    await expect(activeSlide.locator(".overlay-detail-position")).toHaveText([
+      "Unknown",
+      "Unknown",
+      "Unknown",
+      "Unknown",
+    ]);
+    await expect(
+      activeSlide.locator(".overlay-detail-position:visible"),
+    ).toHaveCount(4);
+    layouts.push({ name, selector, weapons: await readWeaponLayout(activeSlide) });
+  }
+
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  for (const { name, selector, weapons } of layouts) {
+    await page.getByRole("button", { name, exact: true }).click();
+    await expect(activeSlide.locator(selector)).toBeVisible();
+    await expectPositionsHidden(activeSlide);
+    expect(await readWeaponLayout(activeSlide)).toEqual(weapons);
+  }
+  expect(await readStoredSelection(page)).toEqual({
+    ...expectedSelection,
+    showPositions: false,
+  });
+  expect(api.requestCount("/overlay/matchup")).toBe(1);
+
+  await page.reload();
+  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  for (const { name, selector, weapons } of layouts) {
+    await page.getByRole("button", { name, exact: true }).click();
+    await expect(activeSlide.locator(selector)).toBeVisible();
+    await expectPositionsHidden(activeSlide);
+    expect(await readWeaponLayout(activeSlide)).toEqual(weapons);
+  }
+
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  for (const { name, selector, weapons } of layouts) {
+    await page.getByRole("button", { name, exact: true }).click();
+    await expect(activeSlide.locator(selector)).toBeVisible();
+    await expect(activeSlide.locator(".overlay-detail-position")).toHaveText([
+      "Unknown",
+      "Unknown",
+      "Unknown",
+      "Unknown",
+    ]);
+    await expect(
+      activeSlide.locator(".overlay-detail-position:visible"),
+    ).toHaveCount(4);
+    expect(await readWeaponLayout(activeSlide)).toEqual(weapons);
+  }
+  expect(await readStoredSelection(page)).toEqual(expectedSelection);
 });

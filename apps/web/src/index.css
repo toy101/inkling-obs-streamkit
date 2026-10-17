@@ -1209,6 +1209,10 @@ html[data-view="overlay"] body {
   border-radius: 999px;
 }
 
+.overlay-detail-position.is-position-hidden {
+  visibility: hidden;
+}
+
 .overlay-detail-weapons {
   min-width: 0;
   border-left: 1px solid rgb(var(--overlay-ink-rgb) / 14%);

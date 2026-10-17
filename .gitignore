@@ -30,10 +30,12 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .eslintcache
 .cache
 *.tsbuildinfo
+
 /apps/api/.wrangler/
 /apps/web/.wrangler/
 /apps/api/.dev.vars*
 /apps/api/wrangler.production.toml
+*wrangler.toml
 
 # IntelliJ based IDEs
 .idea
@@ -52,5 +54,6 @@ agent_plan
 
 # media
 *.webm
+!/apps/web/e2e/fixtures/stage-reveal.webm
 *.mp4
 /apps/web/public/stage-reveal-vignette.png
