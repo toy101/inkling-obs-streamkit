@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 
+import { PLAYER_NAME_MAX_LENGTH } from '../../../api/src/models/player-name'
 import type {
   AdminApi,
   AdminTeam,
@@ -195,6 +196,10 @@ export function TournamentPanel({
       setTeamMessage({ kind: 'error', text: '追加した参加枠には登録名を入力してください。' })
       return
     }
+    if (input.roster.some((entry) => entry.registeredName.length > PLAYER_NAME_MAX_LENGTH)) {
+      setTeamMessage({ kind: 'error', text: `登録名は${PLAYER_NAME_MAX_LENGTH}文字以内で入力してください。` })
+      return
+    }
     const linkedPlayers = input.roster.flatMap((entry) => entry.playerId ? [entry.playerId] : [])
     if (new Set(linkedPlayers).size !== linkedPlayers.length) {
       setTeamMessage({ kind: 'error', text: '同じ参加者をチーム内で複数回選択できません。' })
@@ -318,7 +323,7 @@ export function TournamentPanel({
                     {teamForm.roster.map((entry, index) => (
                       <div className="roster-row" key={entry.id ?? `new-${index}`}>
                         <span className="roster-order">{index + 1}</span>
-                        <label className="field"><span>登録名</span><input aria-label={`参加者 ${index + 1} 登録名`} value={entry.registeredName} onChange={(event) => updateRoster(index, { registeredName: event.target.value })} /></label>
+                        <label className="field"><span>登録名</span><input aria-label={`参加者 ${index + 1} 登録名`} value={entry.registeredName} maxLength={PLAYER_NAME_MAX_LENGTH} onChange={(event) => updateRoster(index, { registeredName: event.target.value })} /></label>
                         <label className="field"><span>既存参加者との紐付け</span><select aria-label={`参加者 ${index + 1} 紐付け`} value={entry.playerId ?? ''} onChange={(event) => updateRoster(index, { playerId: event.target.value || null })}><option value="">紐付けなし</option>{players.map((player) => <option key={player.id} value={player.id} disabled={player.id !== entry.playerId && teamForm.roster.some((item) => item.playerId === player.id)}>{player.displayName}</option>)}</select></label>
                         <button type="button" className="icon-button" aria-label={`参加者 ${index + 1} を削除`} onClick={() => setTeamForm((current) => updateAutomaticStatus(current, current.roster.filter((_, entryIndex) => entryIndex !== index)))}>×</button>
                       </div>

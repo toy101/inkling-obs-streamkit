@@ -1,10 +1,17 @@
 import { t } from "elysia";
 
+import { PLAYER_NAME_MAX_LENGTH } from "./player-name";
+
 export const TEAM_PLAYER_COUNT = 4;
 export const MAX_PLAYER_WEAPONS = 4;
 
 export const IdSchema = t.String({ minLength: 1, pattern: "\\S" });
 export const NameSchema = t.String({ minLength: 1, pattern: "\\S" });
+export const PlayerNameInputSchema = t.String({
+  minLength: 1,
+  maxLength: PLAYER_NAME_MAX_LENGTH,
+  pattern: "\\S",
+});
 export const TimestampSchema = t.String({ format: "date-time" });
 export const HttpUrlSchema = t.String({
   format: "uri",

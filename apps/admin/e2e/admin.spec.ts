@@ -1,4 +1,4 @@
-import { expect, test, type Page, type Route } from '@playwright/test'
+import { expect, test, type Locator, type Page, type Route } from '@playwright/test'
 
 interface MockState {
   environment: 'local' | 'production'
@@ -164,12 +164,25 @@ async function connect(page: Page) {
   await expect(page.getByText('接続済み')).toBeVisible()
 }
 
+async function insertText(page: Page, input: Locator, text: string) {
+  await input.focus()
+  await page.keyboard.insertText(text)
+}
+
 test('参加者を登録・編集し、再接続後も一覧へ反映する', async ({ page }) => {
   const state: MockState = { environment: 'local', failNextPlayerSave: false, players: [], tournaments: [], teams: [] }
   await mockApi(page, state)
   await connect(page)
   await page.getByRole('button', { name: '参加者', exact: true }).click()
-  await page.getByLabel('参加者名 必須').fill('ヤチヨ')
+  const playerNameInput = page.getByLabel('参加者名 必須')
+  const playerNameAtLimit = 'あ'.repeat(20)
+  await expect(playerNameInput).toHaveAttribute('maxlength', '20')
+  await insertText(page, playerNameInput, playerNameAtLimit)
+  await expect(playerNameInput).toHaveValue(playerNameAtLimit)
+  await playerNameInput.fill('')
+  await insertText(page, playerNameInput, `${playerNameAtLimit}い`)
+  await expect(playerNameInput).toHaveValue(playerNameAtLimit)
+  await playerNameInput.fill('ヤチヨ')
   await page.getByLabel('ポジション').selectOption('front')
   await page.getByRole('button', { name: 'ブキを追加' }).click()
   await page.getByRole('button', { name: '参加者を登録' }).click()
@@ -184,6 +197,44 @@ test('参加者を登録・編集し、再接続後も一覧へ反映する', as
   await page.getByRole('button', { name: '接続する' }).click()
   await page.getByRole('button', { name: '参加者', exact: true }).click()
   await expect(page.getByRole('button', { name: /ヤチヨ改/ })).toBeVisible()
+})
+
+test('既存の20文字超の名前は切り捨てず、保存時に修正を求める', async ({ page }) => {
+  const longPlayerName = '参'.repeat(21)
+  const longRegisteredName = '登'.repeat(21)
+  const state: MockState = {
+    environment: 'local',
+    failNextPlayerSave: false,
+    players: [{ id: 'p1', displayName: longPlayerName, iconUrl: null, position: null, weaponIds: [] }],
+    tournaments: [{
+      id: 't1', organizerUserId: 'owner-1', name: '既存大会', status: 'draft',
+      createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
+    }],
+    teams: [{
+      id: 'team1', tournamentId: 't1', name: '既存チーム', displayOrder: 1, status: 'draft',
+      roster: [{
+        id: 'roster1', tournamentTeamId: 'team1', registeredName: longRegisteredName,
+        displayOrder: 1, playerId: 'p1',
+      }],
+    }],
+  }
+  await mockApi(page, state)
+  await connect(page)
+
+  await page.getByRole('button', { name: '参加者', exact: true }).click()
+  await page.getByRole('button', { name: new RegExp(longPlayerName) }).click()
+  await expect(page.getByLabel('参加者名 必須')).toHaveValue(longPlayerName)
+  await page.getByRole('button', { name: '変更を保存' }).click()
+  await expect(page.getByRole('alert')).toHaveText('参加者名は20文字以内で入力してください。')
+  await expect(page.getByLabel('参加者名 必須')).toHaveValue(longPlayerName)
+
+  await page.getByRole('button', { name: '大会・チーム', exact: true }).click()
+  await page.getByRole('button', { name: /既存大会/ }).click()
+  await page.getByRole('button', { name: /既存チーム 表示順/ }).click()
+  await expect(page.getByLabel('参加者 1 登録名')).toHaveValue(longRegisteredName)
+  await page.getByRole('button', { name: 'チームを更新' }).click()
+  await expect(page.getByRole('alert')).toHaveText('登録名は20文字以内で入力してください。')
+  await expect(page.getByLabel('参加者 1 登録名')).toHaveValue(longRegisteredName)
 })
 
 test('保存失敗をフォーム内に表示し、重複ブキを選べない', async ({ page }) => {
@@ -546,6 +597,15 @@ test('参加者の紐付けで空の登録名を補完し、入力済みの名�
   await page.getByRole('button', { name: /名前補完テスト大会/ }).click()
   await page.getByLabel('チーム名 必須').fill('名前補完チーム')
 
+  const registeredNameInput = page.getByLabel('参加者 1 登録名')
+  const registeredNameAtLimit = 'あ'.repeat(20)
+  await expect(registeredNameInput).toHaveAttribute('maxlength', '20')
+  await insertText(page, registeredNameInput, registeredNameAtLimit)
+  await expect(registeredNameInput).toHaveValue(registeredNameAtLimit)
+  await registeredNameInput.fill('')
+  await insertText(page, registeredNameInput, `${registeredNameAtLimit}い`)
+  await expect(registeredNameInput).toHaveValue(registeredNameAtLimit)
+  await registeredNameInput.fill('')
   await page.getByLabel('参加者 1 紐付け').selectOption('p1')
   await expect(page.getByLabel('参加者 1 登録名')).toHaveValue('Player 1')
   await page.getByLabel('参加者 1 紐付け').selectOption('p2')

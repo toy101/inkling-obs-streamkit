@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 
+import { OverlayPlayerName } from "./OverlayPlayerName";
 import { OVERLAY_HEIGHT, OVERLAY_WIDTH } from "../lib/overlay-canvas";
 import {
   DEBUG_OVERLAY_SLIDES,
@@ -168,9 +169,10 @@ function TeamPanel({ position, team }: TeamPanelProps) {
           <li className="overlay-player-card" key={player.rosterEntryId}>
             <PlayerAvatar player={player} />
 
-            <strong className="overlay-player-name">
-              {player.registeredName}
-            </strong>
+            <OverlayPlayerName
+              className="overlay-player-name"
+              name={player.registeredName}
+            />
           </li>
         ))}
       </ol>
@@ -264,7 +266,10 @@ function TeamDetailSlide({
             <PlayerAvatar player={player} />
 
             <div className="overlay-detail-player-profile">
-              <strong>{player.registeredName}</strong>
+              <OverlayPlayerName
+                className="overlay-detail-player-name"
+                name={player.registeredName}
+              />
             </div>
 
             <span className="overlay-detail-position">

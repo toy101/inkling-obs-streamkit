@@ -1,6 +1,11 @@
 import { t } from "elysia";
 
-import { IdSchema, NameSchema, TEAM_PLAYER_COUNT } from "./common";
+import {
+  IdSchema,
+  NameSchema,
+  PlayerNameInputSchema,
+  TEAM_PLAYER_COUNT,
+} from "./common";
 import {
   TournamentRosterEntrySchema,
   TournamentStatusSchema,
@@ -20,7 +25,7 @@ export type AdminTournamentInput = typeof AdminTournamentInputSchema.static;
 export const AdminRosterEntryInputSchema = t.Object(
   {
     id: t.Nullable(IdSchema),
-    registeredName: NameSchema,
+    registeredName: PlayerNameInputSchema,
     playerId: t.Nullable(IdSchema),
   },
   { additionalProperties: false },
