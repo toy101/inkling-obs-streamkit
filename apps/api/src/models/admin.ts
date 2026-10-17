@@ -4,6 +4,7 @@ import {
   IdSchema,
   NameSchema,
   PlayerNameInputSchema,
+  TeamNameInputSchema,
   TEAM_PLAYER_COUNT,
 } from "./common";
 import {
@@ -34,7 +35,7 @@ export type AdminRosterEntryInput = typeof AdminRosterEntryInputSchema.static;
 
 export const AdminTeamInputSchema = t.Object(
   {
-    name: NameSchema,
+    name: TeamNameInputSchema,
     displayOrder: t.Integer({ minimum: 1 }),
     status: TournamentTeamStatusSchema,
     roster: t.Array(AdminRosterEntryInputSchema, { maxItems: TEAM_PLAYER_COUNT }),

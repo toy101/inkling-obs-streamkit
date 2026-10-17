@@ -210,7 +210,7 @@ describe("admin API", () => {
     });
   });
 
-  test("limits player display and roster names to 20 characters on create and update", async () => {
+  test("limits player display, roster and team names to 20 characters on create and update", async () => {
     const app = makeApp(database);
     const playerName = "あ".repeat(20);
     const updatedPlayerName = "い".repeat(20);
@@ -248,7 +248,7 @@ describe("admin API", () => {
     const tournament = await tournamentResponse.json() as Tournament;
     const teamPath = `/admin/tournaments/${tournament.id}/teams`;
     const teamInput: AdminTeamInput = {
-      name: "T".repeat(21),
+      name: "T".repeat(20),
       displayOrder: 1,
       status: "draft",
       roster: [{ id: null, registeredName: playerName, playerId: player.id }],
@@ -266,10 +266,22 @@ describe("admin API", () => {
       method: "PUT",
       body: JSON.stringify({
         ...teamInput,
+        name: "U".repeat(20),
         roster: [{ id: rosterId, registeredName: updatedPlayerName, playerId: player.id }],
       }),
     });
     expect(updatedTeamResponse.status).toBe(200);
+
+    const rejectedTeamNameCreate = await request(app, teamPath, {
+      method: "POST",
+      body: JSON.stringify({ ...teamInput, name: "T".repeat(21), displayOrder: 2 }),
+    });
+    expect(rejectedTeamNameCreate.status).toBe(422);
+    const rejectedTeamNameUpdate = await request(app, `${teamPath}/${team.id}`, {
+      method: "PUT",
+      body: JSON.stringify({ ...teamInput, name: "U".repeat(21) }),
+    });
+    expect(rejectedTeamNameUpdate.status).toBe(422);
 
     const rejectedTeamCreate = await request(app, teamPath, {
       method: "POST",
@@ -288,6 +300,16 @@ describe("admin API", () => {
       }),
     });
     expect(rejectedTeamUpdate.status).toBe(422);
+
+    const legacyTeamName = "既".repeat(21);
+    database.sqlite.query(`INSERT INTO tournament_teams
+      (id, tournament_id, name, display_order, status) VALUES (?, ?, ?, ?, ?)`)
+      .run("legacy-team", tournament.id, legacyTeamName, 99, "draft");
+    const legacyTeamResponse = await request(app, teamPath);
+    expect(legacyTeamResponse.status).toBe(200);
+    expect(await legacyTeamResponse.json()).toContainEqual(
+      expect.objectContaining({ id: "legacy-team", name: legacyTeamName }),
+    );
   });
 
   test("rejects invalid player references and hides a rolled-back runtime failure", async () => {

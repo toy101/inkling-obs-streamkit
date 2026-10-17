@@ -512,7 +512,6 @@ html[data-view="overlay"] body {
   line-height: 1.2;
   letter-spacing: 0.06em;
   text-shadow: 0 2px 10px rgb(5 7 15 / 50%);
-  text-overflow: ellipsis;
   white-space: nowrap;
   background: rgb(var(--overlay-ink-rgb) / 90%);
   border: 1px solid rgb(255 255 255 / 48%);
@@ -622,7 +621,7 @@ html[data-view="overlay"] body {
   white-space: nowrap;
 }
 
-.overlay-player-name-text {
+.overlay-name-text {
   display: inline-block;
 }
 
@@ -1120,6 +1119,8 @@ html[data-view="overlay"] body {
   font-weight: 900;
   line-height: 1.15;
   letter-spacing: 0.08em;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .overlay-detail-columns {

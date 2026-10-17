@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 
-import { OverlayPlayerName } from "./OverlayPlayerName";
+import { OverlayName } from "./OverlayName";
 import { OVERLAY_HEIGHT, OVERLAY_WIDTH } from "../lib/overlay-canvas";
 import {
   DEBUG_OVERLAY_SLIDES,
@@ -162,14 +162,14 @@ type TeamPanelProps = {
 function TeamPanel({ position, team }: TeamPanelProps) {
   return (
     <section className={`overlay-team overlay-team--${position}`}>
-      <h2 className="overlay-team-name">{team.name}</h2>
+      <OverlayName as="h2" className="overlay-team-name" name={team.name} />
 
       <ol className="overlay-player-grid">
         {team.players.map((player) => (
           <li className="overlay-player-card" key={player.rosterEntryId}>
             <PlayerAvatar player={player} />
 
-            <OverlayPlayerName
+            <OverlayName
               className="overlay-player-name"
               name={player.registeredName}
             />
@@ -251,7 +251,7 @@ function TeamDetailSlide({
     >
       <header className="overlay-slide-header">
         <span className="overlay-slide-eyebrow">{teamLabel}</span>
-        <h1>{team.name}</h1>
+        <OverlayName as="h1" className="overlay-detail-team-name" name={team.name} />
       </header>
 
       <div className="overlay-detail-columns" aria-hidden="true">
@@ -266,7 +266,7 @@ function TeamDetailSlide({
             <PlayerAvatar player={player} />
 
             <div className="overlay-detail-player-profile">
-              <OverlayPlayerName
+              <OverlayName
                 className="overlay-detail-player-name"
                 name={player.registeredName}
               />

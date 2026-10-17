@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 
 import { PLAYER_NAME_MAX_LENGTH } from '../../../api/src/models/player-name'
+import { TEAM_NAME_MAX_LENGTH } from '../../../api/src/models/team-name'
 import type {
   AdminApi,
   AdminTeam,
@@ -192,6 +193,10 @@ export function TournamentPanel({
       setTeamMessage({ kind: 'error', text: 'チーム名を入力してください。' })
       return
     }
+    if (input.name.length > TEAM_NAME_MAX_LENGTH) {
+      setTeamMessage({ kind: 'error', text: `チーム名は${TEAM_NAME_MAX_LENGTH}文字以内で入力してください。` })
+      return
+    }
     if (input.roster.some((entry) => !entry.registeredName)) {
       setTeamMessage({ kind: 'error', text: '追加した参加枠には登録名を入力してください。' })
       return
@@ -300,7 +305,7 @@ export function TournamentPanel({
                 <fieldset className="save-fields" disabled={saving || teamsLoading}>
                 <h3>{selectedTeam ? 'チームを編集' : 'チームを登録'}</h3>
                 <div className="form-grid team-basics">
-                  <label className="field"><span>チーム名 <b>必須</b></span><input value={teamForm.name} onChange={(event) => setTeamForm({ ...teamForm, name: event.target.value })} /></label>
+                  <label className="field"><span>チーム名 <b>必須</b></span><input value={teamForm.name} maxLength={TEAM_NAME_MAX_LENGTH} onChange={(event) => setTeamForm({ ...teamForm, name: event.target.value })} /></label>
                   <label className="field"><span>表示順</span><input type="number" min="1" value={teamForm.displayOrder} onChange={(event) => setTeamForm({ ...teamForm, displayOrder: Math.max(1, Number(event.target.value) || 1) })} /></label>
                   <label className="field team-status-field">
                     <span>チームの状態</span>

@@ -202,6 +202,7 @@ test('参加者を登録・編集し、再接続後も一覧へ反映する', as
 test('既存の20文字超の名前は切り捨てず、保存時に修正を求める', async ({ page }) => {
   const longPlayerName = '参'.repeat(21)
   const longRegisteredName = '登'.repeat(21)
+  const longTeamName = 'チ'.repeat(21)
   const state: MockState = {
     environment: 'local',
     failNextPlayerSave: false,
@@ -211,7 +212,7 @@ test('既存の20文字超の名前は切り捨てず、保存時に修正を求
       createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
     }],
     teams: [{
-      id: 'team1', tournamentId: 't1', name: '既存チーム', displayOrder: 1, status: 'draft',
+      id: 'team1', tournamentId: 't1', name: longTeamName, displayOrder: 1, status: 'draft',
       roster: [{
         id: 'roster1', tournamentTeamId: 'team1', registeredName: longRegisteredName,
         displayOrder: 1, playerId: 'p1',
@@ -230,8 +231,13 @@ test('既存の20文字超の名前は切り捨てず、保存時に修正を求
 
   await page.getByRole('button', { name: '大会・チーム', exact: true }).click()
   await page.getByRole('button', { name: /既存大会/ }).click()
-  await page.getByRole('button', { name: /既存チーム 表示順/ }).click()
+  await page.getByRole('button', { name: new RegExp(`${longTeamName} 表示順`) }).click()
+  await expect(page.getByLabel('チーム名 必須')).toHaveValue(longTeamName)
   await expect(page.getByLabel('参加者 1 登録名')).toHaveValue(longRegisteredName)
+  await page.getByRole('button', { name: 'チームを更新' }).click()
+  await expect(page.getByRole('alert')).toHaveText('チーム名は20文字以内で入力してください。')
+  await expect(page.getByLabel('チーム名 必須')).toHaveValue(longTeamName)
+  await page.getByLabel('チーム名 必須').fill('既存チーム')
   await page.getByRole('button', { name: 'チームを更新' }).click()
   await expect(page.getByRole('alert')).toHaveText('登録名は20文字以内で入力してください。')
   await expect(page.getByLabel('参加者 1 登録名')).toHaveValue(longRegisteredName)
@@ -595,7 +601,15 @@ test('参加者の紐付けで空の登録名を補完し、入力済みの名�
   await mockApi(page, state)
   await connect(page)
   await page.getByRole('button', { name: /名前補完テスト大会/ }).click()
-  await page.getByLabel('チーム名 必須').fill('名前補完チーム')
+  const teamNameInput = page.getByLabel('チーム名 必須')
+  const teamNameAtLimit = 'チ'.repeat(20)
+  await expect(teamNameInput).toHaveAttribute('maxlength', '20')
+  await insertText(page, teamNameInput, teamNameAtLimit)
+  await expect(teamNameInput).toHaveValue(teamNameAtLimit)
+  await teamNameInput.fill('')
+  await insertText(page, teamNameInput, `${teamNameAtLimit}ム`)
+  await expect(teamNameInput).toHaveValue(teamNameAtLimit)
+  await teamNameInput.fill('名前補完チーム')
 
   const registeredNameInput = page.getByLabel('参加者 1 登録名')
   const registeredNameAtLimit = 'あ'.repeat(20)
