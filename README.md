@@ -12,6 +12,8 @@ The flow is:
 
 Because the Dock, the Overlay and a Debug view all live in the same app, the overlay can be built and checked in a browser without launching OBS.
 
+The Dock's **Position display** button immediately shows or hides player positions on both team detail slides. Hiding positions keeps the weapon lists in the same place. The setting is saved with the current selection and restored after a reload; existing saved selections default to showing positions.
+
 ## Requirements
 
 - [Bun](https://bun.sh) — developed on 1.4.2. Bun 1.3.1 failed to resolve a peer dependency while installing Elysia, so run `bun upgrade` if installation breaks.
