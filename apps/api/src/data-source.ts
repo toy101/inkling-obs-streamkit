@@ -4,6 +4,7 @@ import {
 } from "./create-data-source";
 import { jsonDataSource } from "./data/queries";
 import { createD1StorageDataSource } from "./db/queries";
+import { createD1AdminDataSource } from "./db/admin-queries";
 import { db } from "./db/client";
 import { catalogDataSource, requireWeapon } from "./catalog-store";
 import { readHttpsOriginEnvironmentVariable, requireEnvironmentVariable } from "./env";
@@ -25,6 +26,11 @@ function selectDataSource(name: string): StorageDataSource {
 
 export const dataSourceName = requireEnvironmentVariable("API_DATA_SOURCE");
 const selectedDataSource = selectDataSource(dataSourceName);
+
+// Management always targets D1; JSON remains the existing read-only workflow.
+export const adminDataSource = dataSourceName === "d1"
+  ? createD1AdminDataSource(db, { requireWeapon })
+  : null;
 
 export const dataSource = createDataSource({
   storageDataSource: selectedDataSource,

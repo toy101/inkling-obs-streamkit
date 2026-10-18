@@ -9,6 +9,9 @@ export const DEBUG_OVERLAY_AUTOPLAY_MESSAGE =
   "inkling:debug-overlay-autoplay";
 export const DEBUG_OVERLAY_STAGE_REVEAL_MESSAGE =
   "inkling:debug-overlay-stage-reveal";
+export const DEBUG_OVERLAY_STAGE_REVEAL_TEXT_MESSAGE =
+  "inkling:debug-overlay-stage-reveal-text";
+export const DEBUG_OVERLAY_READY_MESSAGE = "inkling:debug-overlay-ready";
 
 export type DebugOverlaySlideIndex =
   (typeof DEBUG_OVERLAY_SLIDES)[number]["index"];
@@ -25,6 +28,23 @@ export type DebugOverlayAutoplayMessage = {
 
 export type DebugOverlayStageRevealMessage = {
   type: typeof DEBUG_OVERLAY_STAGE_REVEAL_MESSAGE;
+};
+
+export type DebugStageRevealText = {
+  ruleName: string;
+  ruleEn: string;
+  ruleDescription: string;
+  stageName: string;
+  stageEn: string;
+};
+
+export type DebugOverlayStageRevealTextMessage = {
+  type: typeof DEBUG_OVERLAY_STAGE_REVEAL_TEXT_MESSAGE;
+  text: DebugStageRevealText;
+};
+
+export type DebugOverlayReadyMessage = {
+  type: typeof DEBUG_OVERLAY_READY_MESSAGE;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -61,4 +81,26 @@ export function isDebugOverlayStageRevealMessage(
   value: unknown,
 ): value is DebugOverlayStageRevealMessage {
   return isRecord(value) && value.type === DEBUG_OVERLAY_STAGE_REVEAL_MESSAGE;
+}
+
+export function isDebugOverlayStageRevealTextMessage(
+  value: unknown,
+): value is DebugOverlayStageRevealTextMessage {
+  return (
+    isRecord(value) &&
+    value.type === DEBUG_OVERLAY_STAGE_REVEAL_TEXT_MESSAGE &&
+    isRecord(value.text) &&
+    !Array.isArray(value.text) &&
+    typeof value.text.ruleName === "string" &&
+    typeof value.text.ruleEn === "string" &&
+    typeof value.text.ruleDescription === "string" &&
+    typeof value.text.stageName === "string" &&
+    typeof value.text.stageEn === "string"
+  );
+}
+
+export function isDebugOverlayReadyMessage(
+  value: unknown,
+): value is DebugOverlayReadyMessage {
+  return isRecord(value) && value.type === DEBUG_OVERLAY_READY_MESSAGE;
 }

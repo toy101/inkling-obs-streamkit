@@ -9,15 +9,21 @@
   ],
   "scripts": {
     "dev": "bun run dev:apps",
-    "dev:apps": "bun run --parallel --filter './apps/*' dev",
-    "dev:json": "bun run --parallel --filter './apps/*' dev:json",
-    "dev:d1": "bun run --parallel --filter './apps/*' dev:d1",
+    "dev:apps": "bun run --parallel --filter api --filter web dev",
+    "dev:json": "bun run --parallel --filter api --filter web dev:json",
+    "dev:d1": "bun run --parallel --filter api --filter web dev:d1",
+    "dev:admin:local": "bun run --parallel --filter api --filter web --filter admin dev:d1",
+    "dev:admin:production": "bun run --parallel --filter api --filter web --filter admin dev:d1:remote",
     "openapi:build": "bun run scripts/generate-openapi.ts",
     "spellcheck": "cspell lint . --no-progress",
     "db:migrate": "bun run --filter api db:migrate",
     "db:seed": "bun run --filter api db:seed",
     "db:setup": "bun run --filter api db:setup",
-    "db:setup:local": "bun run --filter api db:setup:local"
+    "db:setup:local": "bun run --filter api db:setup:local",
+    "cf:login": "bun run --filter api cf:login",
+    "cf:whoami": "bun run --filter api cf:whoami",
+    "db:check:production": "bun run --filter api db:check:production",
+    "db:migrate:production": "bun run --filter api db:migrate:production"
   },
   "devDependencies": {
     "@types/bun": "latest",

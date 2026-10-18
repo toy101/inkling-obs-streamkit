@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { OVERLAY_HEIGHT, OVERLAY_WIDTH } from "../lib/overlay-canvas";
 import {
@@ -6,8 +6,13 @@ import {
   DEBUG_OVERLAY_SLIDES,
   DEBUG_OVERLAY_SLIDE_MESSAGE,
   DEBUG_OVERLAY_STAGE_REVEAL_MESSAGE,
+  DEBUG_OVERLAY_STAGE_REVEAL_TEXT_MESSAGE,
+  isDebugOverlayReadyMessage,
 } from "../lib/debug-overlay-preview";
-import type { DebugOverlaySlideIndex } from "../lib/debug-overlay-preview";
+import type {
+  DebugOverlaySlideIndex,
+  DebugStageRevealText,
+} from "../lib/debug-overlay-preview";
 import { Dock } from "./Dock";
 
 const zoomOptions = [
@@ -20,11 +25,29 @@ const zoomOptions = [
 
 type ZoomMode = (typeof zoomOptions)[number]["value"];
 
+const initialStageRevealText: DebugStageRevealText = {
+  ruleName: "",
+  ruleEn: "",
+  ruleDescription: "",
+  stageName: "",
+  stageEn: "",
+};
+
+const stageRevealTextFields = [
+  { key: "ruleName", label: "ルール名（日本語）" },
+  { key: "ruleEn", label: "ルール名（英語）" },
+  { key: "ruleDescription", label: "ルール説明（英語）" },
+  { key: "stageName", label: "ステージ名（日本語）" },
+  { key: "stageEn", label: "ステージ名（英語）" },
+] as const;
+
 export function Debug() {
   const overlayFrameRef = useRef<HTMLIFrameElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const [isOverlayFrameLoaded, setIsOverlayFrameLoaded] = useState(false);
   const [isAutoplayEnabled, setIsAutoplayEnabled] = useState(true);
+  const [stageRevealText, setStageRevealText] =
+    useState<DebugStageRevealText>(initialStageRevealText);
   const [zoomMode, setZoomMode] = useState<ZoomMode>("fit");
   const [fitScale, setFitScale] = useState(0);
 
@@ -63,14 +86,45 @@ export function Debug() {
     );
   };
 
-  const setAutoplay = (autoplay: boolean) => {
+  const setAutoplay = useCallback((autoplay: boolean) => {
     overlayFrameRef.current?.contentWindow?.postMessage(
       { type: DEBUG_OVERLAY_AUTOPLAY_MESSAGE, autoplay },
       window.location.origin,
     );
+  }, []);
+
+  useEffect(() => {
+    const receiveOverlayReady = (event: MessageEvent<unknown>) => {
+      if (
+        event.source !== overlayFrameRef.current?.contentWindow ||
+        event.origin !== window.location.origin ||
+        !isDebugOverlayReadyMessage(event.data)
+      ) {
+        return;
+      }
+
+      // The carousel mounts after its API response and can remount on selection changes.
+      setAutoplay(isAutoplayEnabled);
+    };
+
+    window.addEventListener("message", receiveOverlayReady);
+    return () => window.removeEventListener("message", receiveOverlayReady);
+  }, [isAutoplayEnabled, setAutoplay]);
+
+  const sendStageRevealText = (text: DebugStageRevealText) => {
+    overlayFrameRef.current?.contentWindow?.postMessage(
+      { type: DEBUG_OVERLAY_STAGE_REVEAL_TEXT_MESSAGE, text },
+      window.location.origin,
+    );
+  };
+
+  const updateStageRevealText = (text: DebugStageRevealText) => {
+    setStageRevealText(text);
+    sendStageRevealText(text);
   };
 
   const showStageReveal = () => {
+    sendStageRevealText(stageRevealText);
     overlayFrameRef.current?.contentWindow?.postMessage(
       { type: DEBUG_OVERLAY_STAGE_REVEAL_MESSAGE },
       window.location.origin,
@@ -143,6 +197,40 @@ export function Debug() {
           </div>
         </header>
 
+        <details className="debug-stage-reveal-text">
+          <summary>紹介テキストを上書き</summary>
+          <p id="stage-reveal-text-hint">
+            紹介プレビューだけに即時反映します。動画の再生は続きます。
+            空欄は再生開始時の表示を使います。
+          </p>
+          <fieldset
+            aria-describedby="stage-reveal-text-hint"
+            aria-label="紹介テキスト"
+            disabled={!isOverlayFrameLoaded}
+          >
+            {stageRevealTextFields.map(({ key, label }) => (
+              <label key={key}>
+                {label}
+                <input
+                  onChange={(event) => updateStageRevealText({
+                    ...stageRevealText,
+                    [key]: event.target.value,
+                  })}
+                  placeholder="元の表示を使用"
+                  type="text"
+                  value={stageRevealText[key]}
+                />
+              </label>
+            ))}
+            <button
+              onClick={() => updateStageRevealText(initialStageRevealText)}
+              type="button"
+            >
+              元の表示に戻す
+            </button>
+          </fieldset>
+        </details>
+
         <dl className="debug-metrics">
           <div>
             <dt>描画サイズ</dt>
@@ -174,6 +262,7 @@ export function Debug() {
                 onLoad={() => {
                   setIsOverlayFrameLoaded(true);
                   setAutoplay(isAutoplayEnabled);
+                  sendStageRevealText(stageRevealText);
                 }}
                 ref={overlayFrameRef}
                 title="1920 × 1080 Overlay プレビュー"

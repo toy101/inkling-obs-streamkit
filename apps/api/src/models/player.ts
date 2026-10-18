@@ -7,6 +7,7 @@ import {
   IdSchema,
   MAX_PLAYER_WEAPONS,
   NameSchema,
+  PlayerNameInputSchema,
   TimestampSchema,
 } from "./common";
 
@@ -44,6 +45,7 @@ export const PlayerWeaponIdsSchema = t.Array(IdSchema, {
 export const PlayerInputSchema = t.Object(
   {
     ...t.Pick(PlayerSchema, ["displayName", "iconUrl", "positionId"]).properties,
+    displayName: PlayerNameInputSchema,
     weaponIds: PlayerWeaponIdsSchema,
   },
   { additionalProperties: false },

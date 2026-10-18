@@ -18,6 +18,7 @@ export type OverlaySelection = {
   stageId: string;
   accentColor: string;
   matchLabel: string;
+  showPositions: boolean;
 };
 
 export type StageRevealRequest = {
@@ -27,7 +28,7 @@ export type StageRevealRequest = {
 };
 
 type OverlayMessage =
-  | { type: "selection"; selection: OverlaySelection }
+  | { type: "selection"; selection: OverlaySelection | null }
   | { type: "stage-reveal"; request: StageRevealRequest };
 
 type Listener = (selection: OverlaySelection | null) => void;
@@ -79,6 +80,10 @@ function parseOverlaySelection(value: unknown): OverlaySelection | null {
     stageId: getString(value, "stageId") ?? "",
     accentColor: normalizeAccentColor(value["accentColor"]),
     matchLabel: normalizeMatchLabel(value["matchLabel"]),
+    showPositions:
+      typeof value["showPositions"] === "boolean"
+        ? value["showPositions"]
+        : true,
   };
 }
 
@@ -117,6 +122,7 @@ function parseOverlayMessage(value: unknown): OverlayMessage | null {
 
   switch (value["type"]) {
     case "selection": {
+      if (value["selection"] === null) return { type: "selection", selection: null };
       const selection = parseOverlaySelection(value["selection"]);
       return selection ? { type: "selection", selection } : null;
     }
@@ -151,6 +157,11 @@ function subscribeOverlayMessages(
 
 export function getOverlaySelection(): OverlaySelection | null {
   return parseStoredOverlaySelection(localStorage.getItem(STORAGE_KEY));
+}
+
+export function clearOverlaySelection(): void {
+  localStorage.removeItem(STORAGE_KEY);
+  postOverlayMessage({ type: "selection", selection: null });
 }
 
 export function setOverlaySelection(selection: OverlaySelection): void {

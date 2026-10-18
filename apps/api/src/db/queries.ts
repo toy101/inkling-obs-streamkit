@@ -8,11 +8,17 @@ import type {
   OverlayTeamsQuery,
 } from "../models/overlay";
 import type { PlayerProfile } from "../models/player";
-import type { Tournament, TournamentStatus, TournamentTeam } from "../models/tournament";
+import type {
+  Tournament,
+  TournamentStatus,
+  TournamentTeam,
+  TournamentTeamStatus,
+} from "../models/tournament";
 import type { StorageDataSource } from "../create-data-source";
 
 export type QueryDatabase = {
   execute(statement: string | Statement): Promise<{ rows: Row[] }>;
+  batch(statements: readonly (string | Statement)[]): Promise<void>;
 };
 
 type WeaponCatalog = {
@@ -50,6 +56,14 @@ function tournamentStatus(row: Row): TournamentStatus {
   switch (status) {
     case "draft": case "registration": case "locked": case "archived": return status;
     default: throw new Error("Invalid tournament status in database");
+  }
+}
+
+function tournamentTeamStatus(row: Row): TournamentTeamStatus {
+  const status = text(row, "status");
+  switch (status) {
+    case "draft": case "confirmed": case "hidden": return status;
+    default: throw new Error("Invalid tournament team status in database");
   }
 }
 
@@ -99,13 +113,18 @@ export function createD1StorageDataSource(
 
   async function listTournamentTeams(tournamentId: string): Promise<TournamentTeam[]> {
     const { rows } = await db.execute({
-      sql: "SELECT * FROM tournament_teams WHERE tournament_id = ? ORDER BY display_order, id",
+      sql: `SELECT team.* FROM tournament_teams team
+        WHERE team.tournament_id = ?
+          AND team.status = 'confirmed'
+          AND 4 = (SELECT COUNT(*) FROM tournament_roster_entries roster
+            WHERE roster.tournament_team_id = team.id)
+        ORDER BY team.display_order, team.id`,
       args: [tournamentId],
     });
     return rows.map((row) => ({
       id: text(row, "id"), tournamentId: text(row, "tournament_id"),
       name: text(row, "name"), displayOrder: integer(row, "display_order"),
-      rosterLockedAt: nullableText(row, "roster_locked_at"),
+      status: tournamentTeamStatus(row),
     }));
   }
 
@@ -161,6 +180,9 @@ export function createD1StorageDataSource(
         LEFT JOIN positions pos ON pos.id = p.position_id
         LEFT JOIN player_weapons pw ON pw.player_id = p.id
         WHERE t.id = ? AND team.id IN (?, ?)
+          AND team.status = 'confirmed'
+          AND 4 = (SELECT COUNT(*) FROM tournament_roster_entries roster_count
+            WHERE roster_count.tournament_team_id = team.id)
         ORDER BY team.display_order, r.display_order, pw.display_order`,
       args: [
         query.tournamentId,

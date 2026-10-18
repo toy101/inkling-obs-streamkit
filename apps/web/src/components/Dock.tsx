@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, FormEvent } from "react";
 
 import { api } from "../lib/api";
 import type { Rule, Stage, Tournament, TournamentTeam } from "../lib/api";
 import {
+  clearOverlaySelection,
   DEFAULT_ACCENT_COLOR,
   getOverlaySelection,
   isAccentColor,
@@ -85,6 +86,7 @@ function getAccentColorFromHue(hue: number): string {
 }
 
 export function Dock() {
+  const restoredSelection = useRef(getOverlaySelection());
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [teams, setTeams] = useState<TournamentTeam[]>([]);
   const [rules, setRules] = useState<Rule[]>([]);
@@ -114,7 +116,7 @@ export function Dock() {
     return getAccentColorFromHue(getHueFromHex(storedAccentColor));
   });
   const [submittedSelection, setSubmittedSelection] =
-    useState(getOverlaySelection);
+    useState<OverlaySelection | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -139,6 +141,10 @@ export function Dock() {
       )
         ? (storedTournamentId ?? "")
         : (data[0]?.id ?? "");
+      if (storedTournamentId && storedTournamentId !== initialTournamentId) {
+        clearOverlaySelection();
+        setSubmittedSelection(null);
+      }
       setSelectedTournamentId(initialTournamentId);
     };
 
@@ -170,7 +176,7 @@ export function Dock() {
         return;
       }
 
-      const storedSelection = getOverlaySelection();
+      const storedSelection = getOverlaySelection() ?? restoredSelection.current;
       const initialRuleId = rulesResponse.data.some(
         (rule) => rule.id === storedSelection?.ruleId,
       )
@@ -219,28 +225,41 @@ export function Dock() {
         return;
       }
 
+      const visibleTeams = data.filter((team) => team.status === "confirmed");
       const storedSelection = getOverlaySelection();
       const canReuseStoredTeams =
         storedSelection?.tournamentId === selectedTournamentId;
       const storedAlphaTeamId = canReuseStoredTeams
         ? storedSelection.alphaTournamentTeamId
         : "";
-      const initialAlphaTeamId = data.some(
+      const initialAlphaTeamId = visibleTeams.some(
         (team) => team.id === storedAlphaTeamId,
       )
         ? storedAlphaTeamId
-        : (data[0]?.id ?? "");
+        : (visibleTeams[0]?.id ?? "");
       const storedBravoTeamId = canReuseStoredTeams
         ? storedSelection.bravoTournamentTeamId
         : "";
-      const initialBravoTeamId = data.some(
+      const initialBravoTeamId = visibleTeams.some(
         (team) =>
           team.id === storedBravoTeamId && team.id !== initialAlphaTeamId,
       )
         ? storedBravoTeamId
-        : (data.find((team) => team.id !== initialAlphaTeamId)?.id ?? "");
+        : (visibleTeams.find((team) => team.id !== initialAlphaTeamId)?.id ?? "");
 
-      setTeams(data);
+      if (canReuseStoredTeams && storedSelection) {
+        const validStoredTeams = storedAlphaTeamId !== storedBravoTeamId
+          && visibleTeams.some((team) => team.id === storedAlphaTeamId)
+          && visibleTeams.some((team) => team.id === storedBravoTeamId);
+        if (validStoredTeams) {
+          setSubmittedSelection(storedSelection);
+        } else {
+          clearOverlaySelection();
+          setSubmittedSelection(null);
+        }
+      }
+
+      setTeams(visibleTeams);
       setAlphaTeamId(initialAlphaTeamId);
       setBravoTeamId(initialBravoTeamId);
     };
@@ -283,6 +302,8 @@ export function Dock() {
     submittedStageId &&
     isAccentColor(accentColor) &&
     alphaTeamId !== bravoTeamId &&
+    teams.some((team) => team.id === alphaTeamId) &&
+    teams.some((team) => team.id === bravoTeamId) &&
     isMatchupDirty,
   );
   const canSubmitMatchLabel = Boolean(
@@ -313,8 +334,9 @@ export function Dock() {
       bravoTournamentTeamId: bravoTeamId,
       ruleId: submittedRuleId,
       stageId: submittedStageId,
-      accentColor: submittedSelection?.accentColor ?? DEFAULT_ACCENT_COLOR,
-      matchLabel: submittedSelection?.matchLabel ?? "",
+      accentColor: submittedSelection?.accentColor ?? restoredSelection.current?.accentColor ?? DEFAULT_ACCENT_COLOR,
+      matchLabel: submittedSelection?.matchLabel ?? restoredSelection.current?.matchLabel ?? "",
+      showPositions: submittedSelection?.showPositions ?? restoredSelection.current?.showPositions ?? true,
     };
 
     commitSelection(nextSelection);
@@ -363,10 +385,22 @@ export function Dock() {
     });
   };
 
+  const handlePositionToggle = () => {
+    if (!submittedSelection) {
+      return;
+    }
+
+    commitSelection({
+      ...submittedSelection,
+      showPositions: !submittedSelection.showPositions,
+    });
+  };
+
   const dockStyle: DockStyle = {
     "--dock-accent-color": accentColor,
   };
   const accentHue = getHueFromHex(accentColor);
+  const showPositions = submittedSelection?.showPositions ?? true;
 
   return (
     <main className="dock" style={dockStyle}>
@@ -540,6 +574,19 @@ export function Dock() {
           </button>
         </div>
       </form>
+
+      <section className="dock-form" aria-labelledby="dock-position-heading">
+        <h2 id="dock-position-heading">表示設定</h2>
+        <button
+          aria-pressed={showPositions}
+          className="dock-submit"
+          disabled={!submittedSelection}
+          onClick={handlePositionToggle}
+          type="button"
+        >
+          ポジション表示: {showPositions ? "オン" : "オフ"}
+        </button>
+      </section>
     </main>
   );
 }

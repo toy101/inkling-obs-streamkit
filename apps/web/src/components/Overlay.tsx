@@ -1,14 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 
+import { OverlayName } from "./OverlayName";
 import { OVERLAY_HEIGHT, OVERLAY_WIDTH } from "../lib/overlay-canvas";
 import {
+  DEBUG_OVERLAY_READY_MESSAGE,
   DEBUG_OVERLAY_SLIDES,
   isDebugOverlayAutoplayMessage,
   isDebugOverlaySlideMessage,
   isDebugOverlayStageRevealMessage,
+  isDebugOverlayStageRevealTextMessage,
 } from "../lib/debug-overlay-preview";
-import type { DebugOverlaySlideIndex } from "../lib/debug-overlay-preview";
+import type {
+  DebugOverlaySlideIndex,
+  DebugStageRevealText,
+} from "../lib/debug-overlay-preview";
 
 import { api } from "../lib/api";
 import type { OverlayMatchup } from "../lib/api";
@@ -162,16 +168,17 @@ type TeamPanelProps = {
 function TeamPanel({ position, team }: TeamPanelProps) {
   return (
     <section className={`overlay-team overlay-team--${position}`}>
-      <h2 className="overlay-team-name">{team.name}</h2>
+      <OverlayName as="h2" className="overlay-team-name" name={team.name} />
 
       <ol className="overlay-player-grid">
         {team.players.map((player) => (
           <li className="overlay-player-card" key={player.rosterEntryId}>
             <PlayerAvatar player={player} />
 
-            <strong className="overlay-player-name">
-              {player.registeredName}
-            </strong>
+            <OverlayName
+              className="overlay-player-name"
+              name={player.registeredName}
+            />
           </li>
         ))}
       </ol>
@@ -188,6 +195,7 @@ type MatchupCardSlideProps = MatchupSlideProps & {
 };
 
 type OverlayCarouselProps = MatchupCardSlideProps & {
+  showPositions: boolean;
   suspended: boolean;
 };
 
@@ -231,6 +239,7 @@ function MatchupSlide({ matchup, matchLabel }: MatchupCardSlideProps) {
 type TeamDetailSlideProps = {
   loadWeaponImages: boolean;
   position: TeamPosition;
+  showPositions: boolean;
   teamDesignation: TeamDesignation;
   team: OverlayTeam;
 };
@@ -238,10 +247,12 @@ type TeamDetailSlideProps = {
 function TeamDetailSlide({
   loadWeaponImages,
   position,
+  showPositions,
   teamDesignation,
   team,
 }: TeamDetailSlideProps) {
   const teamLabel = teamDesignation === "alpha" ? "ALPHA TEAM" : "BRAVO TEAM";
+  const positionClassName = showPositions ? "" : " is-position-hidden";
 
   return (
     <section
@@ -250,12 +261,12 @@ function TeamDetailSlide({
     >
       <header className="overlay-slide-header">
         <span className="overlay-slide-eyebrow">{teamLabel}</span>
-        <h1>{team.name}</h1>
+        <OverlayName as="h1" className="overlay-detail-team-name" name={team.name} />
       </header>
 
       <div className="overlay-detail-columns" aria-hidden="true">
         <span>PLAYER</span>
-        <span>POSITION</span>
+        <span>{showPositions ? "POSITION" : ""}</span>
         <span>WEAPONS</span>
       </div>
 
@@ -265,11 +276,17 @@ function TeamDetailSlide({
             <PlayerAvatar player={player} />
 
             <div className="overlay-detail-player-profile">
-              <strong>{player.registeredName}</strong>
+              <OverlayName
+                className="overlay-detail-player-name"
+                name={player.registeredName}
+              />
             </div>
 
-            <span className="overlay-detail-position">
-              {player.position?.name ?? "Unknown"}
+            <span
+              className={`overlay-detail-position${positionClassName}`}
+              aria-hidden={!showPositions}
+            >
+              {showPositions ? (player.position?.name ?? "Unknown") : ""}
             </span>
 
             <div className="overlay-detail-weapons">
@@ -319,6 +336,7 @@ function selectCarouselSlide(
 function OverlayCarousel({
   matchup,
   matchLabel,
+  showPositions,
   suspended,
 }: OverlayCarouselProps) {
   const [carouselState, setCarouselState] = useState<CarouselState>({
@@ -403,6 +421,12 @@ function OverlayCarousel({
     };
 
     window.addEventListener("message", receiveDebugSlide);
+    if (window.parent !== window) {
+      window.parent.postMessage(
+        { type: DEBUG_OVERLAY_READY_MESSAGE },
+        window.location.origin,
+      );
+    }
     return () => window.removeEventListener("message", receiveDebugSlide);
   }, []);
 
@@ -417,6 +441,7 @@ function OverlayCarousel({
         <TeamDetailSlide
           loadWeaponImages
           position="left"
+          showPositions={showPositions}
           teamDesignation="alpha"
           team={matchup.alpha}
         />
@@ -428,6 +453,7 @@ function OverlayCarousel({
         <TeamDetailSlide
           loadWeaponImages={loadBravoTeamImages}
           position="right"
+          showPositions={showPositions}
           teamDesignation="bravo"
           team={matchup.bravo}
         />
@@ -482,30 +508,37 @@ type StageRevealPlayback = {
   phase: StageRevealPhase;
 };
 
-type StageRevealContentProps = Pick<StageRevealPlayback, "rule" | "stage">;
+type StageRevealContentProps = Pick<StageRevealPlayback, "rule" | "stage"> & {
+  text: DebugStageRevealText | null;
+};
 
-function StageRevealContent({ rule, stage }: StageRevealContentProps) {
-  const stageNameBreakIndex = stage.en.indexOf(" ");
+function StageRevealContent({ rule, stage, text }: StageRevealContentProps) {
+  const ruleName = text?.ruleName || rule.name;
+  const ruleEn = text?.ruleEn || rule.en;
+  const ruleDescription = text?.ruleDescription || rule.description;
+  const stageName = text?.stageName || stage.name;
+  const stageEn = text?.stageEn || stage.en;
+  const stageNameBreakIndex = stageEn.indexOf(" ");
 
   return (
     <div className="overlay-stage-reveal-content">
       <section className="overlay-stage-reveal-rule" aria-label="選択ルール">
-        <strong lang="en">{rule.en}</strong>
-        <p lang="en">{rule.description}</p>
-        <span lang="ja">{rule.name}</span>
+        <strong lang="en">{ruleEn}</strong>
+        <p lang="en">{ruleDescription}</p>
+        <span lang="ja">{ruleName}</span>
       </section>
 
       <section className="overlay-stage-reveal-stage" aria-label="選択ステージ">
-        <span lang="ja">{stage.name}</span>
+        <span lang="ja">{stageName}</span>
         <strong lang="en">
           {stageNameBreakIndex >= 0 ? (
             <>
-              {stage.en.slice(0, stageNameBreakIndex)}
+              {stageEn.slice(0, stageNameBreakIndex)}
               <br />
-              {stage.en.slice(stageNameBreakIndex + 1)}
+              {stageEn.slice(stageNameBreakIndex + 1)}
             </>
           ) : (
-            stage.en
+            stageEn
           )}
         </strong>
       </section>
@@ -520,6 +553,8 @@ export function Overlay() {
     useState<OverlayStageRevealRequest | null>(null);
   const [stageRevealPlayback, setStageRevealPlayback] =
     useState<StageRevealPlayback | null>(null);
+  const [debugStageRevealText, setDebugStageRevealText] =
+    useState<DebugStageRevealText | null>(null);
   const stageRevealVideoRef = useRef<HTMLVideoElement>(null);
 
   const tournamentId = selection?.tournamentId ?? "";
@@ -529,6 +564,7 @@ export function Overlay() {
   const stageId = selection?.stageId ?? "";
   const accentColor = selection?.accentColor ?? DEFAULT_ACCENT_COLOR;
   const matchLabel = selection?.matchLabel ?? "";
+  const showPositions = selection?.showPositions ?? true;
   const dataSelectionKey = getMatchupDataSelectionKey({
     tournamentId,
     alphaTournamentTeamId,
@@ -579,6 +615,11 @@ export function Overlay() {
         return;
       }
 
+      if (isDebugOverlayStageRevealTextMessage(event.data)) {
+        setDebugStageRevealText(event.data.text);
+        return;
+      }
+
       if (!isDebugOverlayStageRevealMessage(event.data) || !ruleId || !stageId) {
         return;
       }
@@ -604,10 +645,7 @@ export function Overlay() {
       console.error(
         "ステージ紹介に必要なルール・ステージ情報を取得できませんでした",
       );
-      const timeoutId = window.setTimeout(
-        () => setStageRevealRequest(null),
-        0,
-      );
+      const timeoutId = window.setTimeout(() => setStageRevealRequest(null), 0);
       return () => window.clearTimeout(timeoutId);
     }
 
@@ -835,6 +873,7 @@ export function Overlay() {
           key={dataSelectionKey}
           matchup={matchup}
           matchLabel={matchLabel}
+          showPositions={showPositions}
           suspended={stageRevealPlayback !== null}
         />
       )}
@@ -871,6 +910,7 @@ export function Overlay() {
           <StageRevealContent
             rule={stageRevealPlayback.rule}
             stage={stageRevealPlayback.stage}
+            text={stageRevealPlayback.loop ? debugStageRevealText : null}
           />
 
           <div className="overlay-stage-transition" aria-hidden="true">
@@ -888,9 +928,7 @@ export function Overlay() {
                 MAP // LOCKED
               </span>
               <strong>Next Stage</strong>
-              <span className="overlay-stage-transition-meta">
-                Coming Soon
-              </span>
+              <span className="overlay-stage-transition-meta">Coming Soon</span>
             </div>
           </div>
         </div>

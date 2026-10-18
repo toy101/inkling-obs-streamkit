@@ -2,7 +2,7 @@ import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 
 if (process.env.CI !== "true") {
-  throw new Error("This script is only for the CI quality workflow.");
+  throw new Error("This script is only for CI workflows.");
 }
 
 const workspaceRoot = resolve(import.meta.dir, "..");

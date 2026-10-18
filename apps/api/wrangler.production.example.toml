@@ -1,0 +1,22 @@
+# Copy to wrangler.production.toml and set your actual account and D1 identifiers.
+# This configuration runs the API locally while the DB binding accesses production D1.
+name = "inkling-obs-streamkit-api-admin"
+main = "src/worker.ts"
+compatibility_date = "2026-09-28"
+account_id = "YOUR_CLOUDFLARE_ACCOUNT_ID"
+
+[env.production]
+name = "inkling-obs-streamkit-api-admin-production"
+
+[env.production.vars]
+ADMIN_ENVIRONMENT = "production"
+CORS_ALLOWED_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173"
+ADMIN_ALLOWED_ORIGINS = "http://localhost:5174,http://127.0.0.1:5174"
+
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "YOUR_PRODUCTION_D1_DATABASE_NAME"
+database_id = "YOUR_PRODUCTION_D1_DATABASE_ID"
+remote = true
+migrations_dir = "src/db/migrations"
+migrations_table = "d1_migrations"

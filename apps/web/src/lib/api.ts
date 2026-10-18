@@ -1,7 +1,7 @@
 import { treaty } from "@elysia/eden";
 import type { Treaty } from "@elysia/eden";
 
-import type { App } from "../../../api/src";
+import type { App } from "../../../api/src/create-app";
 
 function readApiUrl(value: unknown): string {
   if (typeof value !== "string" || value.trim() === "") {

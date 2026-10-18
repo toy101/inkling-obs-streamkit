@@ -9,6 +9,8 @@ const migrations = [
   "006_localized_matchup_catalogs.sql",
   "007_rule_descriptions.sql",
   "008_external_matchup_catalogs.sql",
+  "009_add_tournament_team_status.sql",
+  "010_backfill_tournament_team_status.sql",
 ];
 
 export async function migrate() {

@@ -4,5 +4,8 @@ declare module "cloudflare:workers" {
     CATALOG_URL: string;
     CORS_ALLOWED_ORIGINS: string;
     IKACLO_API_ORIGIN: string;
+    ADMIN_API_TOKEN?: string;
+    ADMIN_ALLOWED_ORIGINS?: string;
+    ADMIN_ENVIRONMENT?: "local" | "production";
   };
 }

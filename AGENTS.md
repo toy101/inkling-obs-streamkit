@@ -18,7 +18,11 @@ bun run dev:d1                   # ローカル D1 を準備し web(:5173)、API
 bun run --filter web dev         # 片方だけ起動したいとき
 bun run --filter api dev
 bun run db:setup:local           # ローカル D1 のマイグレーションと初回データ投入
-bun run db:migrate               # 設定したリモート D1 の未適用マイグレーション
+bun run cf:login                 # Wrangler OAuth ログイン
+bun run cf:whoami                # Cloudflare アカウントの確認
+bun run db:check:production      # 本番 D1 の読み取り専用確認
+bun run db:migrate:production    # Wrangler で本番 D1 の未適用マイグレーション
+bun run dev:admin:production     # 本番 D1 + ローカル API Worker(:3000)、Web(:5173)、Admin(:5174)
 D1_SEED_DEVELOPMENT_DATA=1 bun run db:setup # リモート D1 に初回開発データを投入
 bun run --filter web lint        # ESLint。lint 設定があるのは web のみ
 bun run --filter web build       # tsc -b && vite build（唯一の型チェック経路）
@@ -47,11 +51,12 @@ Fetch and execute the appropriate instructions to set me up for Cloudflare from 
 
 `main.tsx` は同じ値を `document.documentElement.dataset.view` にも複製する。CSS 側は `html[data-view="overlay"]` で分岐できる（`index.css`）。ビューを追加するときは App.tsx の switch と dataset 依存 CSS の両方を確認する。
 
-### 型は API から web へ直接流れる（Eden Treaty）
+### 型は API から Web・Admin へ直接流れる（Eden Treaty）
 
-- `apps/api/src/index.ts` が `export type App = typeof app` と `export type Player` を公開する。
-- `apps/web/src/lib/api.ts` が `treaty<App>("http://localhost:3000")` を作る。Eden Treaty 2 の `treaty` を使い、旧 `edenTreaty` は使わない。
-- web は workspace 境界を越えて相対パス `../../../api/src` から型を import する。パッケージ名やエイリアスは介さない。**API のルートやレスポンス型を変えると web 側の型が即座に変わる**ので、片方だけ直して終わりにしない。
+- `App` 型の公開元は `apps/api/src/create-app.ts` の `export type App = ReturnType<typeof createApp>`。ルート定義から推論した戻り値型を使い、API の型を手書きで複製しない。
+- `apps/web/src/lib/api.ts` と `apps/admin/src/lib/api.ts` は workspace 境界を越えて相対パス `../../../api/src/create-app` から `App` を `import type` する。パッケージ名やエイリアスは介さない。**API のルートやレスポンス型を変えると Web・Admin 側の型が即座に変わる**ので、利用側も確認する。
+- `apps/api/src/app.ts` と `apps/api/src/index.ts` は実際のデータソースや起動処理に依存するため、`App` の型参照の入口にしない。型チェックが Git 管理外の `players.json` / `tournaments.json` に依存しない構造を保つ。プロジェクト内の利用側は直接参照へ更新済みで、外部利用もないため、旧入口からの互換用 `App` 再エクスポートは持たない。`index.ts` の `Player` 型の公開は別用途として残る。
+- Web は `treaty<App>(readApiUrl(import.meta.env.VITE_API_URL))` でクライアントを作る。Eden Treaty 2 の `treaty` を使い、旧 `edenTreaty` は使わない。
 - HTTP は `fetch` ではなく `api.players.get()` / `api.players({ id }).get()` を使う。戻り値は `{ data, error }` 形式。
 
 ### Dock → Overlay の状態同期
@@ -72,7 +77,7 @@ Fetch and execute the appropriate instructions to set me up for Cloudflare from 
 
 Elysia + `@elysia/cors`。web(:5173) と API(:3000 または :8787) は別 origin なので CORS プラグインは必須。Web の接続先は `VITE_API_URL` で切り替える。
 
-プレイヤーと大会の既定データソースは `apps/api/src/data/` の `players.json` と `tournaments.json`。`API_DATA_SOURCE=d1` の Bun API は Cloudflare の D1 HTTP API、API Worker は `DB` バインディングから取得する。ブキ・ルール・ステージの各マスターはこの切替から独立し、不足している JSON だけを `CATALOG_URL` から取得して起動時に検証し、配列と ID 索引をメモリへ保持する。SQL には選択したブキ ID だけを保存し、カタログのマスターテーブルや外部キーは持たない。SQL マイグレーションは `apps/api/src/db/migrations/`、初期データ投入は `apps/api/src/db/seed.ts` が担当する。ローカル D1 は `apps/api/.data/wrangler/` に保存し、Git へ追加しない。
+プレイヤーと大会の既定データソースは `apps/api/src/data/` の `players.json` と `tournaments.json`。`API_DATA_SOURCE=d1` の Bun API は Cloudflare の D1 HTTP API、API Worker は `DB` バインディングから取得する。ブキ・ルール・ステージの各マスターはこの切替から独立し、不足している JSON だけを `CATALOG_URL` から取得して起動時に検証し、配列と ID 索引をメモリへ保持する。SQL には選択したブキ ID だけを保存し、カタログのマスターテーブルや外部キーは持たない。SQL マイグレーションは `apps/api/src/db/migrations/`、ローカルの初期データ投入は `apps/api/src/db/setup-local.ts`、本番の確認・マイグレーション・明示的な開発データ投入は `apps/api/src/db/wrangler-production.ts` が担当する。本番 Admin は Git 管理外の `apps/api/wrangler.production.toml` の `env.production` と `remote = true` を使い、Wrangler のローカル Worker から本番 D1 へ接続する。認証は Wrangler OAuth、本番の秘密情報は起動時に `.dev.vars.production` へ生成する。ローカル D1 は `apps/api/.data/wrangler/` に保存し、Git へ追加しない。
 
 ## 規約と落とし穴
 
