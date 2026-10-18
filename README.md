@@ -16,9 +16,9 @@ The Dock's **Position display** button immediately shows or hides player positio
 
 ## Requirements
 
-- [Bun](https://bun.sh) — developed on 1.4.2. Bun 1.3.1 failed to resolve a peer dependency while installing Elysia, so run `bun upgrade` if installation breaks.
+- [Bun](https://bun.sh): developed on 1.4.2. Bun 1.3.1 failed to resolve a peer dependency while installing Elysia, so run `bun upgrade` if installation breaks.
 - A Cloudflare account and a D1 database are needed only when using `API_DATA_SOURCE=d1`. JSON remains the default.
-- OBS Studio — only needed to actually put the overlay on air. Day-to-day development happens in the Debug view.
+- OBS Studio is only needed to actually put the overlay on air. Day-to-day development happens in the Debug view.
 
 ## Getting started
 
@@ -58,7 +58,9 @@ Opening the site without `view` just prints the accepted values.
 
 ## Admin app
 
-`apps/admin` is a local management app for creating and updating tournaments, tournament teams, and participants. Edit tournament names and statuses, team order, up to four roster names and linked participants, and participant icons, positions, and up to four weapons. Roster entries can have a registered name without a linked participant. Team status is automatically draft with fewer than four members and confirmed with four. Select hidden to retain the roster and participant data while excluding the team from Dock and Overlay. Restoring a hidden team recalculates its status from the roster size. Admin can edit every status; Dock and Overlay only display confirmed teams.
+`apps/admin` is a local management app for creating and updating tournaments, tournament teams, and participants. Edit tournament names and statuses, team order, up to four roster names and linked participants, and participant icons, positions, and up to four weapons. Roster entries can have a registered name without a linked participant.
+
+Team status is automatically draft with fewer than four members and confirmed with four. Select hidden to retain the roster and participant data while excluding the team from Dock and Overlay. Restoring a hidden team recalculates its status from the roster size. Admin can edit every status; Dock and Overlay only display confirmed teams.
 
 1. Run `cp apps/admin/.env.example apps/admin/.env.local`.
 2. Set a sufficiently long random `ADMIN_API_TOKEN` in `apps/api/.env.local` (for example, generate one with `bun -e 'console.log(crypto.randomUUID())'`).
@@ -102,9 +104,9 @@ bun run --filter admin test:e2e
 | Custom Browser Dock | `http://localhost:5173/?view=dock`    | any                      |
 | Browser Source      | `http://localhost:5173/?view=overlay` | width 1920 / height 1080 |
 
-Keep Chrome's page zoom at 100% when comparing the preview against OBS, and do not add custom CSS to the browser source. A fixed canvas size alone does not guarantee identical rendering across operating systems or Chromium versions — fonts in particular.
+Keep Chrome's page zoom at 100% when comparing the preview against OBS, and do not add custom CSS to the browser source. A fixed canvas size alone does not guarantee identical rendering across operating systems or Chromium versions, especially because of font differences.
 
-## Overlay preview (Debug view)
+## Overlay preview in Debug view
 
 - The overlay always renders at **1920 × 1080 px (16:9)**.
 - Debug loads the real `?view=overlay` page in an iframe of exactly that size and shrinks it only with `transform: scale()` on the wrapper. Viewport, `rem` and media query conditions therefore match the production page.
@@ -162,7 +164,7 @@ When an intentional design change is made, review the rendered result locally an
 bun run --filter web test:e2e -- --update-snapshots
 ```
 
-Inspect the changed PNG files under `apps/web/e2e/visual-regression.spec.ts-snapshots/` before committing them. Baselines are intentionally managed for the `chromium-linux` project (`*-chromium-linux.png`), matching the Ubuntu Chromium environment in GitHub Actions. Baseline generation on macOS or Windows is not canonical; use the same Linux Chromium environment and do not commit platform-specific files generated on another OS. The `web-smoke` pull request workflow uploads actual screenshots, diffs and traces from `apps/web/test-results/` together with the tracked expected baselines when a test fails. These browser checks do not claim pixel-perfect equivalence with OBS CEF; that remains a separate manual gate.
+Inspect the changed PNG files under `apps/web/e2e/visual-regression.spec.ts-snapshots/` before committing them. Baselines are intentionally managed for the `chromium-linux` project (`*-chromium-linux.png`), matching the Ubuntu Chromium environment in GitHub Actions. Baseline generation on macOS or Windows is not canonical; use the same Linux Chromium environment and do not commit platform-specific files generated on another OS. The `web-smoke` pull request workflow uploads actual screenshots, diffs and traces from `apps/web/test-results/` together with the tracked expected baselines when a test fails. These browser checks do not claim pixel-perfect equivalence with OBS CEF; verify that separately in OBS.
 
 Pull requests run the `quality` check on a clean checkout. It uses Bun 1.4.2, installs with the frozen lockfile, prepares deterministic fixtures inside the ignored runtime paths, and runs the API type check, Web and Admin lint/build, and spellcheck. `admin-smoke` verifies management create/update flows and environment checks using a mock API. The tracked TypeScript adapters and schema SQL make these checks independent of `.env.local`, the local database, the CDN and the Ikaclo API.
 
@@ -174,11 +176,11 @@ GitHub Pages must use **GitHub Actions** as its publishing source in the reposit
 
 ## How it works
 
-**Types flow from the API into the web app.** `apps/api/src/index.ts` exports `type App = typeof app`, and `apps/web/src/lib/api.ts` builds an Eden Treaty client from it. The web app imports the API's source types across the workspace, so changing a route immediately changes the types on the front end. Requests go through typed calls such as `api.overlay.matchup.get()` rather than direct `fetch` calls.
+**Types flow from the API into the web app**. `apps/api/src/index.ts` exports `type App = typeof app`, and `apps/web/src/lib/api.ts` builds an Eden Treaty client from it. The web app imports the API's source types across the workspace, so changing a route immediately changes the types on the front end. Requests go through typed calls such as `api.overlay.matchup.get()` rather than direct `fetch` calls.
 
-**The Dock only hands over selection IDs and presentation settings.** API responses are never sent over the channel or stored in `localStorage`; the Overlay fetches the data again from the API, which keeps the backend the single source of truth. `apps/web/src/lib/overlay-state.ts` sends changes over a `BroadcastChannel` and keeps only the latest selection in `localStorage`, so the Dock and the Overlay can restore it after a reload or an OBS restart. One-off events such as the stage reveal are never stored, so a restart does not replay them. The Dock and the Overlay are separate pages both in OBS and in the Debug view, where the Overlay is an iframe, so both setups use the same path.
+**The Dock only hands over selection IDs and presentation settings**. API responses are never sent over the channel or stored in `localStorage`; the Overlay fetches the data again from the API, which keeps the backend the single source of truth. `apps/web/src/lib/overlay-state.ts` sends changes over a `BroadcastChannel` and keeps only the latest selection in `localStorage`, so the Dock and the Overlay can restore it after a reload or an OBS restart. One-off events such as the stage reveal are never stored, so a restart does not replay them. The Dock and the Overlay are separate pages both in OBS and in the Debug view, where the Overlay is an iframe, so both setups use the same path.
 
-**The canvas size is a constant.** `apps/web/src/lib/overlay-canvas.ts` holds 1920 × 1080, and both the Overlay and the Debug preview read it from there.
+**The canvas size is a constant**. `apps/web/src/lib/overlay-canvas.ts` holds 1920 × 1080, and both the Overlay and the Debug preview read it from there.
 
 ## Data sources
 
@@ -226,7 +228,9 @@ Rules contain `id`, Japanese `name`, English `en` and `description`; stages cont
 
 The local `weapons.json`, `rules.json` and `stages.json` under [`apps/api/src/data/`](./apps/api/src/data/) are runtime inputs and remain outside Git. To update one, publish the remote catalog, remove only the corresponding local file, and restart the API. The preparation script downloads the missing file again. CI does not use the CDN: `scripts/prepare-ci-fixtures.ts` writes small deterministic fixtures into these ignored paths before the quality checks.
 
-Weapon images are resolved together when `/overlay/matchup` loads. The API collects the distinct numeric weapon IDs in that matchup and calls the HTTPS origin configured by `IKACLO_API_ORIGIN`, validating both the weapon and returned image URL. Each ID is requested at most once during the lifetime of the API process: concurrent matchups share the same in-flight request, and later Overlay reloads or matchup changes reuse its cached result. Failed lookups are cached too, so there is no polling or automatic retry; restarting the API clears the cache. The browser keeps all four carousel slides mounted, but activates weapon image elements progressively: Team A, the next slide, loads initially, and Team B starts loading when Team A becomes active, one full slide interval before it is shown. Once activated, images remain mounted, so changing slides does not refetch weapon details or remount loaded images. Changing only the Dock accent color also does not reload matchup data.
+Weapon images are resolved together when `/overlay/matchup` loads. The API collects the distinct numeric weapon IDs in that matchup and calls the HTTPS origin configured by `IKACLO_API_ORIGIN`, validating both the weapon and returned image URL. Each ID is requested at most once during the lifetime of the API process: concurrent matchups share the same in-flight request, and later Overlay reloads or matchup changes reuse its cached result. Failed lookups are cached too, so there is no polling or automatic retry; restarting the API clears the cache.
+
+The browser keeps all four carousel slides mounted, but activates weapon image elements progressively: Team A, the next slide, loads initially, and Team B starts loading when Team A becomes active, one full slide interval before it is shown. Once activated, images remain mounted, so changing slides does not refetch weapon details or remount loaded images. Changing only the Dock accent color also does not reload matchup data.
 
 The catalogs are independent of `API_DATA_SOURCE`. SQL stores selected weapon IDs and their display order, but it has no weapon, rule or stage master tables and no foreign key to an external catalog. Both JSON and D1 modes resolve catalog IDs through the same in-memory indexes, and the UI reads them through the Elysia API.
 
