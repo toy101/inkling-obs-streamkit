@@ -497,6 +497,76 @@ for (const failure of ["http", "network"] as const) {
   });
 }
 
+for (const { label, side, autoplay } of [
+  { label: "アルファチーム 詳細", side: "left", autoplay: true },
+  { label: "ブラボーチーム 詳細", side: "right", autoplay: false },
+] as const) {
+  test(`ステージ紹介の確定・再生後も${label}の表示位置を維持する`, async ({
+    page,
+    api,
+  }) => {
+    const root = await prepareDebug(page, api);
+    const carousel = root.locator(".overlay-carousel");
+    await expect(carousel).toHaveAttribute("data-autoplay", "true");
+    if (!autoplay) {
+      await page.getByRole("button", { name: "自動切替: オン", exact: true }).click();
+      await expect(carousel).toHaveAttribute("data-autoplay", "false");
+    }
+    await page.getByRole("button", { name: label, exact: true }).click();
+    const activeTeam = root.locator(
+      `.overlay-slide.is-active .overlay-team-detail--${side}`,
+    );
+    await expect(activeTeam).toBeVisible();
+    // A remount loses this marker even if the same slide is selected again.
+    await carousel.evaluate((element) => {
+      element.setAttribute("data-preserved-carousel", "true");
+    });
+
+    await page.getByLabel("ルール", { exact: true }).selectOption(secondRule.id);
+    await page.getByLabel("ステージ", { exact: true }).selectOption(secondStage.id);
+    let releaseMatchup = () => {};
+    const matchupResponse = new Promise<void>((resolve) => {
+      releaseMatchup = resolve;
+    });
+    await page.route("**/overlay/matchup?**", async (route) => {
+      await matchupResponse;
+      await route.fallback();
+    });
+    const matchupRequested = page.waitForRequest((request) =>
+      new URL(request.url()).pathname === "/overlay/matchup",
+    );
+    await page.getByRole("button", { name: "確定・動画再生", exact: true }).click();
+    await matchupRequested;
+    await expect(carousel).toHaveAttribute("data-preserved-carousel", "true");
+    await expect(activeTeam).toBeVisible();
+    releaseMatchup();
+    await expect.poll(() => readDownloads(root)).toHaveLength(1);
+    await expect(carousel).toHaveAttribute("data-preserved-carousel", "true");
+    await expect(activeTeam).toBeVisible();
+
+    await completeDownload(page, root);
+    await assertPlaying(page, root);
+    await assertRevealSelection(root, secondRule, secondStage);
+    await page.clock.fastForward(8_000);
+    await expect(activeTeam).toBeVisible();
+    await expect(carousel).toHaveClass(/is-paused/);
+    await expect(carousel).toHaveAttribute("data-autoplay", String(autoplay));
+
+    await root.getByLabel("選択ステージ紹介動画").dispatchEvent("ended");
+    await page.clock.runFor(150);
+    await assertNoReveal(root);
+    await expect(activeTeam).toBeVisible();
+    await expect(carousel).toHaveAttribute("data-preserved-carousel", "true");
+    await page.clock.fastForward(8_000);
+    if (autoplay) {
+      await expect(activeTeam).toHaveCount(0);
+      await expect(root.locator(".overlay-slide.is-active .overlay-team-detail--right")).toBeVisible();
+    } else {
+      await expect(activeTeam).toBeVisible();
+    }
+  });
+}
+
 test("連続要求は古い本文ダウンロードを中断し、遅い完了でも最新の紹介を維持する", async ({
   page,
   api,
