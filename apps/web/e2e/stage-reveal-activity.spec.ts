@@ -7,7 +7,12 @@ type ActivityMockWindow = typeof window & {
   activityMock: {
     requests: StageRevealRequest[];
     inquiries: number;
-    publish: (active: boolean) => void;
+    queryIds: string[];
+    enabledCount: number;
+    switchActiveOnNextQuery: boolean;
+    responders: Record<string, boolean>;
+    publish: (active: boolean, overlayId: string, queryId: string | null) => void;
+    acknowledge: (index: number, accepted: boolean) => void;
   };
 };
 
@@ -27,16 +32,44 @@ test.beforeEach(async ({ page }) => {
     const mock: ActivityMockWindow["activityMock"] = {
       requests: [],
       inquiries: 0,
-      publish: (active) => channel.postMessage({
+      queryIds: [],
+      enabledCount: 0,
+      switchActiveOnNextQuery: false,
+      responders: {},
+      publish: (active, overlayId, queryId) => channel.postMessage({
         type: "stage-reveal-activity",
-        overlayId: "delayed-overlay",
+        overlayId,
         active,
+        queryId,
       }),
+      acknowledge: (index, accepted) => {
+        const request = mock.requests[index];
+        if (!request) throw new Error("Missing stage reveal request.");
+        channel.postMessage({
+          type: "stage-reveal-ack",
+          acknowledgement: { requestId: request.requestId, accepted },
+        });
+      },
     };
     channel.addEventListener("message", (event: MessageEvent<unknown>) => {
       if (typeof event.data !== "object" || event.data === null) return;
       const message = event.data as Record<string, unknown>;
-      if (message["type"] === "stage-reveal-activity-request") mock.inquiries += 1;
+      if (message["type"] === "stage-reveal-activity-request") {
+        mock.inquiries += 1;
+        if (typeof message["queryId"] === "string") mock.queryIds.push(message["queryId"]);
+        if (mock.switchActiveOnNextQuery && typeof message["queryId"] === "string") {
+          mock.switchActiveOnNextQuery = false;
+          mock.responders["active-overlay"] = false;
+          mock.responders["other-active-overlay"] = true;
+          mock.publish(false, "active-overlay", null);
+          mock.publish(true, "other-active-overlay", message["queryId"]);
+        }
+        if (typeof message["queryId"] === "string") {
+          for (const [overlayId, active] of Object.entries(mock.responders)) {
+            mock.publish(active, overlayId, message["queryId"]);
+          }
+        }
+      }
       if (message["type"] !== "stage-reveal") return;
       const value = message["request"];
       if (typeof value !== "object" || value === null) return;
@@ -64,9 +97,18 @@ async function waitForDock(page: Page): Promise<void> {
   )).toBeGreaterThan(0);
 }
 
-async function publishActivity(page: Page, active: boolean): Promise<void> {
-  await page.evaluate((active) =>
-    (window as ActivityMockWindow).activityMock.publish(active), active,
+async function publishActivity(
+  page: Page,
+  active: boolean,
+  overlayId = "delayed-overlay",
+  queryId: string | null = null,
+): Promise<void> {
+  await page.evaluate(({ active, overlayId, queryId }) => {
+    const mock = (window as ActivityMockWindow).activityMock;
+    if (queryId === null) mock.responders[overlayId] = active;
+    mock.publish(active, overlayId, queryId);
+  },
+    { active, overlayId, queryId },
   );
   // Let the real BroadcastChannel response and React render finish.
   await page.evaluate(() => new Promise<void>((resolve) => {
@@ -113,6 +155,7 @@ test("Overlayの応答が遅れても送信直後から二重送信を防ぐ", a
   await expect(submit).toBeDisabled();
   await publishActivity(page, true);
   await expect(submit).toBeDisabled();
+  await page.evaluate(() => (window as ActivityMockWindow).activityMock.acknowledge(0, true));
   await publishActivity(page, false);
   await expect(submit).toBeEnabled();
   await submit.click();
@@ -120,4 +163,72 @@ test("Overlayの応答が遅れても送信直後から二重送信を防ぐ", a
   await expect.poll(() => page.evaluate(() =>
     (window as ActivityMockWindow).activityMock.requests.length,
   )).toBe(2);
+});
+
+test("応答のない要求はタイムアウトし、Overlay復帰後に再読込せず再送信できる", async ({ page }) => {
+  await page.goto("/?view=dock");
+  await waitForDock(page);
+  const submit = page.getByRole("button", { name: "確定・動画再生", exact: true });
+  await publishActivity(page, false);
+  await expect(submit).toBeEnabled();
+  await page.evaluate(() => { (window as ActivityMockWindow).activityMock.responders = {}; });
+  await submit.click();
+  await expect.poll(() => page.evaluate(() =>
+    (window as ActivityMockWindow).activityMock.requests.length,
+  )).toBe(1);
+  await expect(page.getByRole("status")).toContainText("Overlayから応答がありません", { timeout: 4_000 });
+  await expect(submit).toBeDisabled();
+
+  // The source is available again; no Dock reload is needed to clear pending.
+  await publishActivity(page, false);
+  await expect(submit).toBeEnabled();
+  await expect(page.getByRole("status")).toHaveCount(0);
+  await submit.click();
+  await expect.poll(() => page.evaluate(() =>
+    (window as ActivityMockWindow).activityMock.requests.length,
+  )).toBe(2);
+  await publishActivity(page, true);
+  await page.evaluate(() => (window as ActivityMockWindow).activityMock.acknowledge(1, true));
+  const inquiryCount = await page.evaluate(() => (window as ActivityMockWindow).activityMock.inquiries);
+  await expect.poll(() => page.evaluate(() =>
+    (window as ActivityMockWindow).activityMock.inquiries,
+  ), { timeout: 5_000 }).toBeGreaterThan(inquiryCount + 2);
+  await expect(submit).toBeDisabled();
+  await publishActivity(page, false);
+  await expect(submit).toBeEnabled();
+});
+
+test("複数Overlayでは先着idleで有効化せず、古い照会のidleも無視する", async ({ page }) => {
+  await page.goto("/?view=dock");
+  await waitForDock(page);
+  const submit = page.getByRole("button", { name: "確定・動画再生", exact: true });
+  await submit.evaluate((element) => {
+    const button = element as HTMLButtonElement;
+    const observer = new MutationObserver(() => {
+      if (!button.disabled) (window as ActivityMockWindow).activityMock.enabledCount += 1;
+    });
+    observer.observe(button, { attributes: true, attributeFilter: ["disabled"] });
+  });
+  const initialQuery = await page.evaluate(() =>
+    (window as ActivityMockWindow).activityMock.queryIds.at(-1) ?? "",
+  );
+  await publishActivity(page, false, "idle-overlay", initialQuery);
+  await expect(submit).toBeDisabled();
+  await publishActivity(page, true, "active-overlay", initialQuery);
+  await expect.poll(() => page.evaluate(() =>
+    (window as ActivityMockWindow).activityMock.queryIds.at(-1),
+  )).not.toBe(initialQuery);
+  await expect(submit).toBeDisabled();
+  expect(await page.evaluate(() => (window as ActivityMockWindow).activityMock.enabledCount)).toBe(0);
+
+  await publishActivity(page, false, "active-overlay", initialQuery);
+  await expect(submit).toBeDisabled();
+  await page.evaluate(() => { (window as ActivityMockWindow).activityMock.switchActiveOnNextQuery = true; });
+  await expect.poll(() => page.evaluate(() =>
+    (window as ActivityMockWindow).activityMock.switchActiveOnNextQuery,
+  )).toBe(false);
+  await expect(submit).toBeDisabled();
+  expect(await page.evaluate(() => (window as ActivityMockWindow).activityMock.enabledCount)).toBe(0);
+  await publishActivity(page, false, "other-active-overlay");
+  await expect(submit).toBeEnabled();
 });

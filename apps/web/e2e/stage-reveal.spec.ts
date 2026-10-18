@@ -68,6 +68,15 @@ test.beforeEach(async ({ page }) => {
   await prepareMedia(page);
 });
 
+async function waitForStageRevealIdle(page: Page): Promise<void> {
+  const submit = page.getByRole("button", { name: "確定・動画再生", exact: true });
+  // BroadcastChannel callbacks run between clock advances, across documents.
+  await expect.poll(async () => {
+    await page.clock.runFor(100);
+    return submit.isEnabled();
+  }).toBe(true);
+}
+
 async function prepareDebug(
   page: Page,
   api: InstalledApiMock,
@@ -84,6 +93,7 @@ async function prepareDebug(
   await dock.getByRole("button", { name: "対戦を反映", exact: true }).click();
   await expect.poll(() => api.matchupRequests().length).toBe(1);
   await assertMatchup(root);
+  await waitForStageRevealIdle(page);
   return root;
 }
 
@@ -202,8 +212,8 @@ async function requestStageRevealFromSeparateChannel(
   page: Page,
   ruleId: string,
   stageId: string,
-): Promise<void> {
-  await page.evaluate(
+): Promise<boolean> {
+  return page.evaluate(
     ({ ruleId, stageId }) => {
       const rawSelection = localStorage.getItem("inkling:overlay-selection");
       if (rawSelection === null) throw new Error("Missing overlay selection.");
@@ -213,10 +223,33 @@ async function requestStageRevealFromSeparateChannel(
         stageId,
       };
       const channel = new BroadcastChannel("inkling:overlay");
-      channel.postMessage({ type: "selection", selection });
-      channel.postMessage({
-        type: "stage-reveal",
-        request: { requestId: crypto.randomUUID(), ruleId, stageId },
+      const requestId = crypto.randomUUID();
+      return new Promise<boolean>((resolve) => {
+        channel.addEventListener("message", (event: MessageEvent<unknown>) => {
+          const message = event.data;
+          if (
+            typeof message !== "object" ||
+            message === null ||
+            !("type" in message) ||
+            message.type !== "stage-reveal-ack" ||
+            !("acknowledgement" in message) ||
+            typeof message.acknowledgement !== "object" ||
+            message.acknowledgement === null ||
+            !("requestId" in message.acknowledgement) ||
+            message.acknowledgement.requestId !== requestId ||
+            !("accepted" in message.acknowledgement) ||
+            typeof message.acknowledgement.accepted !== "boolean"
+          ) {
+            return;
+          }
+          channel.close();
+          resolve(message.acknowledgement.accepted);
+        });
+        channel.postMessage({ type: "selection", selection });
+        channel.postMessage({
+          type: "stage-reveal",
+          request: { requestId, ruleId, stageId },
+        });
       });
     },
     { ruleId, stageId },
@@ -384,6 +417,8 @@ test("Debugの選択は取得中・遷移中も変更でき、通常の紹介に
   await page.clock.runFor(149);
   await expect(submit).toBeDisabled();
   await page.clock.runFor(1);
+  await expect(submit).toBeDisabled();
+  await waitForStageRevealIdle(page);
   await expect(submit).toBeEnabled();
   await submit.click();
   await expect.poll(() => readDownloads(root)).toHaveLength(2);
@@ -514,6 +549,8 @@ for (const event of ["ended", "error"] as const) {
     await page.clock.runFor(1);
     await assertNoReveal(root);
     await assertMatchup(root);
+    await expect(submit).toBeDisabled();
+    await waitForStageRevealIdle(page);
     await expect(submit).toBeEnabled();
     await expect
       .poll(() =>
@@ -626,6 +663,8 @@ for (const {
     await expect(submit).toBeDisabled();
     await page.clock.runFor(1);
     await assertNoReveal(root);
+    await expect(submit).toBeDisabled();
+    await waitForStageRevealIdle(page);
     await expect(submit).toBeEnabled();
   });
 }
@@ -690,6 +729,7 @@ test("先読み待機中に既定動画も未配置なら一度だけ再取得�
   expect(await readDownloads(root)).toHaveLength(1);
   expect(await readDefaultDownloads(root)).toHaveLength(2);
 
+  await waitForStageRevealIdle(page);
   const submit = page.getByRole("button", {
     name: "確定・動画再生",
     exact: true,
@@ -722,6 +762,7 @@ test("先読み完了後は既定動画を再取得せず繰り返し再生す�
     await root.getByLabel("選択ステージ紹介動画").dispatchEvent("ended");
     await page.clock.runFor(150);
     await assertNoReveal(root);
+    await waitForStageRevealIdle(page);
   }
   expect(await readDefaultDownloads(root)).toHaveLength(1);
   await expect.poll(() => root.evaluate(() =>
@@ -778,12 +819,13 @@ test("先読み失敗後のオンデマンド取得が失敗しても再取得�
   await assertNoReveal(root);
   await assertMatchup(root);
   expect(await readDefaultDownloads(root)).toHaveLength(2);
+  await waitForStageRevealIdle(page);
   await expect(
     page.getByRole("button", { name: "確定・動画再生", exact: true }),
   ).toBeEnabled();
 });
 
-test("既定動画待機中に紹介を切り替えても先読みを維持し、古い紹介を再生しない", async ({ page, api }) => {
+test("既定動画待機中の重複要求を拒否し、先読みと元の紹介を維持する", async ({ page, api }) => {
   const root = await prepareDebug(page, api);
   const submit = page.getByRole("button", { name: "確定・動画再生", exact: true });
   await submit.click();
@@ -794,26 +836,35 @@ test("既定動画待機中に紹介を切り替えても先読みを維持し�
   await page.clock.runFor(1);
   await page.getByLabel("ステージ", { exact: true }).selectOption(secondStage.id);
   await expect(submit).toBeDisabled();
-  await requestStageRevealFromSeparateChannel(
-    page,
-    fixtureData.matchup.rule.id,
-    secondStage.id,
-  );
-  await expect.poll(() => readDownloads(root)).toHaveLength(2);
-  await completeDownload(page, root, 1);
+  expect(
+    await requestStageRevealFromSeparateChannel(
+      page,
+      fixtureData.matchup.rule.id,
+      secondStage.id,
+    ),
+  ).toBe(false);
+  expect(await readDownloads(root)).toHaveLength(1);
+  expect(api.matchupRequests()).toHaveLength(1);
+  await root.evaluate(() => {
+    const mock = (window as StageVideoMockWindow).stageVideoMock;
+    mock.respond(0, 200, true);
+    mock.finishBody(0, true);
+  });
   await assertPlaying(page, root);
-  const source = await root.getByLabel("選択ステージ紹介動画").getAttribute("src");
-  await root.evaluate(() =>
-    (window as StageVideoMockWindow).stageVideoMock.failNetwork(0, true),
-  );
-  await page.clock.runFor(1);
-  await assertRevealSelection(root, fixtureData.matchup.rule, secondStage);
-  await expect(root.getByLabel("選択ステージ紹介動画")).toHaveAttribute("src", source ?? "");
+  await assertRevealSelection(root);
   expect((await readDefaultDownloads(root))[0]?.aborted).toBe(false);
   expect(await readDefaultDownloads(root)).toHaveLength(1);
   expect(await root.evaluate(() =>
     (window as StageVideoMockWindow).stageVideoMock.createdUrls.length,
   )).toBe(1);
+  await root.getByLabel("選択ステージ紹介動画").dispatchEvent("ended");
+  await page.clock.runFor(150);
+  await assertNoReveal(root);
+  await expect.poll(() => api.matchupRequests()).toHaveLength(2);
+  expect(api.matchupRequests()[1]?.query).toMatchObject({
+    ruleId: fixtureData.matchup.rule.id,
+    stageId: secondStage.id,
+  });
 });
 
 for (const failure of ["http", "network"] as const) {
@@ -846,6 +897,7 @@ for (const failure of ["http", "network"] as const) {
     await page.clock.fastForward(1_000);
     await assertNoReveal(root);
     await assertMatchup(root);
+    await waitForStageRevealIdle(page);
     await expect(submit).toBeEnabled();
     expect(
       await root.evaluate(
@@ -931,7 +983,7 @@ for (const { label, side, autoplay } of [
   });
 }
 
-test("連続要求は古い本文ダウンロードを中断し、遅い完了でも最新の紹介を維持する", async ({
+test("本文ダウンロード中の重複要求を拒否し、終了後に保留した選択を反映する", async ({
   page,
   api,
 }) => {
@@ -950,47 +1002,37 @@ test("連続要求は古い本文ダウンロードを中断し、遅い完了�
     .getByLabel("ステージ", { exact: true })
     .selectOption(secondStage.id);
   await expect(submit).toBeDisabled();
-  await requestStageRevealFromSeparateChannel(page, secondRule.id, secondStage.id);
-  await expect.poll(() => readDownloads(root)).toHaveLength(2);
+  expect(
+    await requestStageRevealFromSeparateChannel(page, secondRule.id, secondStage.id),
+  ).toBe(false);
+  expect(await readDownloads(root)).toHaveLength(1);
   expect((await readDownloads(root))[0]).toMatchObject({
     hasAbortSignal: true,
-    aborted: true,
+    aborted: false,
     bodyCompleted: false,
   });
-  expect((await readDownloads(root))[1]).toMatchObject({
-    hasAbortSignal: true,
-    aborted: false,
-  });
   await assertNoReveal(root);
-  expect(api.matchupRequests()[1]?.query).toMatchObject({
-    ruleId: secondRule.id,
-    stageId: secondStage.id,
-  });
-  await completeDownload(page, root, 1);
-  await assertPlaying(page, root);
-  const video = root.getByLabel("選択ステージ紹介動画");
-  const latestSource = await video.getAttribute("src");
+  expect(api.matchupRequests()).toHaveLength(1);
   await root.evaluate(() =>
     (window as StageVideoMockWindow).stageVideoMock.finishBody(0),
   );
-  await expect
-    .poll(async () => (await readDownloads(root))[0]?.bodyRead)
-    .toBe(true);
-  await page.clock.fastForward(1_000);
-  await expect(video).toHaveAttribute("src", latestSource ?? "");
+  await assertPlaying(page, root);
+  const video = root.getByLabel("選択ステージ紹介動画");
+  await assertRevealSelection(root);
   await expect(root.locator(".overlay-stage-reveal")).toHaveCount(1);
-  await expect(root.getByRole("region", { name: "選択ルール" })).toContainText(
-    secondRule.name,
-  );
-  await expect(
-    root.getByRole("region", { name: "選択ステージ" }),
-  ).toContainText(secondStage.name);
   expect(
     await root.evaluate(
       () => (window as StageVideoMockWindow).stageVideoMock.createdUrls,
     ),
-  ).toEqual([latestSource]);
-  expect(api.matchupRequests()).toHaveLength(2);
+  ).toHaveLength(1);
+  await video.dispatchEvent("ended");
+  await page.clock.runFor(150);
+  await assertNoReveal(root);
+  await expect.poll(() => api.matchupRequests()).toHaveLength(2);
+  expect(api.matchupRequests()[1]?.query).toMatchObject({
+    ruleId: secondRule.id,
+    stageId: secondStage.id,
+  });
 });
 
 test("別ページのDock要求もBroadcastChannelでOverlayへ届き、Blob動画を再生する", async ({
@@ -1007,6 +1049,7 @@ test("別ページのDock要求もBroadcastChannelでOverlayへ届き、Blob動�
     await page.goto("/?view=dock");
     await page.getByRole("button", { name: "対戦を反映", exact: true }).click();
     await assertMatchup(root);
+    await waitForStageRevealIdle(page);
     await page
       .getByLabel("ルール", { exact: true })
       .selectOption(secondRule.id);
@@ -1043,6 +1086,8 @@ test("別ページのDock要求もBroadcastChannelでOverlayへ届き、Blob動�
     await overlayPage.clock.runFor(149);
     await expect(reloadedSubmit).toBeDisabled();
     await overlayPage.clock.runFor(1);
+    await expect(reloadedSubmit).toBeDisabled();
+    await waitForStageRevealIdle(page);
     await expect(reloadedSubmit).toBeEnabled();
   } finally {
     overlayApi.assertNoBrowserErrors();

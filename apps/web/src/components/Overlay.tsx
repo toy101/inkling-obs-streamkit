@@ -22,12 +22,13 @@ import type { OverlayMatchup } from "../lib/api";
 import {
   DEFAULT_ACCENT_COLOR,
   getOverlaySelection,
+  publishStageRevealAcknowledgement,
   publishStageRevealActivity,
   subscribeStageReveal,
   subscribeStageRevealActivityRequest,
   subscribeOverlaySelection,
 } from "../lib/overlay-state";
-import type { StageRevealRequest } from "../lib/overlay-state";
+import type { OverlaySelection, StageRevealRequest } from "../lib/overlay-state";
 
 const SLIDE_DURATION_MS = 8_000;
 const STAGE_REVEAL_ENTER_DURATION_MS = 2_600;
@@ -603,17 +604,34 @@ export function Overlay() {
   const [debugStageRevealSelection, setDebugStageRevealSelection] =
     useState<DebugStageRevealSelection>({ ruleId: "", stageId: "" });
   const stageRevealVideoRef = useRef<HTMLVideoElement>(null);
+  const stageRevealBusyRef = useRef(false);
+  const pendingSelectionRef = useRef<{
+    selection: OverlaySelection | null;
+  } | null>(null);
   const stageRevealActive = stageRevealRequest !== null || stageRevealPlayback !== null;
 
   useEffect(() => {
-    const publishActivity = () => publishStageRevealActivity(stageRevealActive);
-    publishActivity();
-    const unsubscribe = subscribeStageRevealActivityRequest(publishActivity);
-    window.addEventListener("pageshow", publishActivity);
+    const publishCurrentActivity = () =>
+      publishStageRevealActivity(stageRevealBusyRef.current);
+    publishCurrentActivity();
+    const unsubscribe = subscribeStageRevealActivityRequest((queryId) =>
+      publishStageRevealActivity(stageRevealBusyRef.current, queryId),
+    );
+    window.addEventListener("pageshow", publishCurrentActivity);
     return () => {
       unsubscribe();
-      window.removeEventListener("pageshow", publishActivity);
+      window.removeEventListener("pageshow", publishCurrentActivity);
     };
+  }, []);
+
+  useEffect(() => {
+    stageRevealBusyRef.current = stageRevealActive;
+    publishStageRevealActivity(stageRevealActive);
+    if (!stageRevealActive && pendingSelectionRef.current) {
+      const { selection: pendingSelection } = pendingSelectionRef.current;
+      pendingSelectionRef.current = null;
+      setSelection(pendingSelection);
+    }
   }, [stageRevealActive]);
 
   useEffect(() => {
@@ -668,13 +686,27 @@ export function Overlay() {
     : null;
 
   useEffect(() => {
-    return subscribeOverlaySelection(setSelection);
+    return subscribeOverlaySelection((nextSelection) => {
+      if (stageRevealBusyRef.current) {
+        pendingSelectionRef.current = { selection: nextSelection };
+        return;
+      }
+      setSelection(nextSelection);
+    });
   }, []);
 
   useEffect(() => {
-    return subscribeStageReveal((request) =>
-      setStageRevealRequest({ ...request, loop: false }),
-    );
+    return subscribeStageReveal((request) => {
+      const accepted = !stageRevealBusyRef.current;
+      if (accepted) {
+        stageRevealBusyRef.current = true;
+      }
+      publishStageRevealActivity(true);
+      publishStageRevealAcknowledgement(request.requestId, accepted);
+      if (accepted) {
+        setStageRevealRequest({ ...request, loop: false });
+      }
+    });
   }, []);
 
   useEffect(() => {
@@ -702,6 +734,7 @@ export function Overlay() {
         return;
       }
 
+      stageRevealBusyRef.current = true;
       setStageRevealRequest({
         requestId: crypto.randomUUID(),
         ruleId,

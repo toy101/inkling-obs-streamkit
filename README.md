@@ -35,6 +35,8 @@ The API reads player and tournament JSON under `apps/api/src/data/` by default, 
 
 After mounting, Overlay preloads the default background video without blocking its initial display and keeps it in memory for the page's lifetime. A missing stage video uses this cached video, or waits for the same download if it is still in progress. A failed preload is retried when the default video is needed.
 
+During a stage reveal, Overlay ignores duplicate playback requests and applies the latest matchup or display-setting changes after the reveal finishes. If an Overlay does not acknowledge a request, Dock ends the pending wait and reports the missing response. State inquiries continue automatically so playback controls recover when the source returns, without reloading Dock.
+
 Choose the development data source from the repository root with Bun:
 
 ```bash
