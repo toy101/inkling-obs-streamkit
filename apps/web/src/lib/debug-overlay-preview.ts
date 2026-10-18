@@ -5,8 +5,7 @@ export const DEBUG_OVERLAY_SLIDES = [
 ] as const;
 
 export const DEBUG_OVERLAY_SLIDE_MESSAGE = "inkling:debug-overlay-slide";
-export const DEBUG_OVERLAY_AUTOPLAY_MESSAGE =
-  "inkling:debug-overlay-autoplay";
+export const DEBUG_OVERLAY_AUTOPLAY_MESSAGE = "inkling:debug-overlay-autoplay";
 export const DEBUG_OVERLAY_STAGE_REVEAL_MESSAGE =
   "inkling:debug-overlay-stage-reveal";
 export const DEBUG_OVERLAY_STAGE_REVEAL_SELECTION_MESSAGE =
