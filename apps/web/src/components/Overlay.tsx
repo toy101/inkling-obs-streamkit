@@ -22,7 +22,9 @@ import type { OverlayMatchup } from "../lib/api";
 import {
   DEFAULT_ACCENT_COLOR,
   getOverlaySelection,
+  publishStageRevealActivity,
   subscribeStageReveal,
+  subscribeStageRevealActivityRequest,
   subscribeOverlaySelection,
 } from "../lib/overlay-state";
 import type { StageRevealRequest } from "../lib/overlay-state";
@@ -33,9 +35,32 @@ const STAGE_REVEAL_EXIT_DURATION_MS = 1_800;
 const STAGE_REVEAL_VIDEO_START_DELAY_MS = 1_450;
 const STAGE_REVEAL_REDUCED_DURATION_MS = 150;
 const STAGE_REVEAL_EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
-const STAGE_REVEAL_VIDEO_URL =
-  "https://inkling-obs-streamkit.toy101-mov.org/stage-video/rainmaker-urchin_underpass.webm";
+const STAGE_REVEAL_VIDEO_BASE_URL =
+  "https://inkling-obs-streamkit.toy101-mov.org";
+const STAGE_REVEAL_DEFAULT_VIDEO_URL = "/stage-background-default.webm";
 const STAGE_REVEAL_VIGNETTE_URL = "/stage-reveal-vignette.png";
+
+// Keep the Blob for this page's lifetime; each playback owns its object URL.
+let defaultStageVideoRequest: Promise<Blob> | null = null;
+
+function loadDefaultStageVideo(): Promise<Blob> {
+  if (!defaultStageVideoRequest) {
+    const request = fetch(STAGE_REVEAL_DEFAULT_VIDEO_URL).then(async (response) => {
+      if (!response.ok) {
+        throw new Error(
+          `既定ステージ動画のダウンロードに失敗しました: ${response.status}`,
+        );
+      }
+      return response.blob();
+    });
+    defaultStageVideoRequest = request;
+    // A failed preload can be retried when the fallback is actually needed.
+    void request.catch(() => {
+      if (defaultStageVideoRequest === request) defaultStageVideoRequest = null;
+    });
+  }
+  return defaultStageVideoRequest;
+}
 
 type OverlayTeam = OverlayMatchup["alpha"];
 type OverlayPlayer = OverlayTeam["players"][number];
@@ -552,6 +577,32 @@ export function Overlay() {
   const [debugStageRevealSelection, setDebugStageRevealSelection] =
     useState<DebugStageRevealSelection>({ ruleId: "", stageId: "" });
   const stageRevealVideoRef = useRef<HTMLVideoElement>(null);
+  const stageRevealActive = stageRevealRequest !== null || stageRevealPlayback !== null;
+
+  useEffect(() => {
+    const publishActivity = () => publishStageRevealActivity(stageRevealActive);
+    publishActivity();
+    const unsubscribe = subscribeStageRevealActivityRequest(publishActivity);
+    window.addEventListener("pageshow", publishActivity);
+    return () => {
+      unsubscribe();
+      window.removeEventListener("pageshow", publishActivity);
+    };
+  }, [stageRevealActive]);
+
+  useEffect(() => {
+    const clearActivity = () => publishStageRevealActivity(false);
+    window.addEventListener("pagehide", clearActivity);
+    return () => {
+      window.removeEventListener("pagehide", clearActivity);
+      clearActivity();
+    };
+  }, []);
+
+  useEffect(() => {
+    // Preloading must not block the overlay or report a playback failure.
+    void loadDefaultStageVideo().catch(() => {});
+  }, []);
 
   const tournamentId = selection?.tournamentId ?? "";
   const alphaTournamentTeamId = selection?.alphaTournamentTeamId ?? "";
@@ -662,16 +713,20 @@ export function Overlay() {
 
     const downloadStageVideo = async () => {
       try {
-        const response = await fetch(STAGE_REVEAL_VIDEO_URL, {
+        // R2 filenames use the catalog's English slug (e.g. scorch_gorge).
+        const stageVideoUrl = `${STAGE_REVEAL_VIDEO_BASE_URL}/stage-video/${encodeURIComponent(stageRevealMatchup.stage.id)}.webm`;
+        const response = await fetch(stageVideoUrl, {
           signal: controller.signal,
         });
-        if (!response.ok) {
+        if (!response.ok && response.status !== 404) {
           throw new Error(
             `ステージ動画のダウンロードに失敗しました: ${response.status}`,
           );
         }
 
-        const videoBlob = await response.blob();
+        const videoBlob = response.status === 404
+          ? await loadDefaultStageVideo()
+          : await response.blob();
         if (controller.signal.aborted) {
           return;
         }
@@ -715,10 +770,13 @@ export function Overlay() {
     const prefersReducedMotion = window.matchMedia(
       "(prefers-reduced-motion: reduce)",
     ).matches;
+    const exitDuration = prefersReducedMotion
+      ? STAGE_REVEAL_REDUCED_DURATION_MS
+      : STAGE_REVEAL_EXIT_DURATION_MS;
     const transitionDuration = prefersReducedMotion
       ? STAGE_REVEAL_REDUCED_DURATION_MS
       : stageRevealPlayback.phase === "exiting"
-        ? STAGE_REVEAL_EXIT_DURATION_MS
+        ? exitDuration
         : STAGE_REVEAL_ENTER_DURATION_MS;
     const videoStartDelay = prefersReducedMotion
       ? 0
@@ -791,6 +849,31 @@ export function Overlay() {
         window.clearTimeout(playTimeoutId);
         window.clearTimeout(completeTransitionTimeoutId);
       };
+    }
+
+    if (stageRevealPlayback.phase === "playing" && !stageRevealPlayback.loop) {
+      const video = stageRevealVideoRef.current;
+      if (!video) return;
+
+      let frameId = 0;
+      const checkRemainingTime = () => {
+        if (
+          !video.paused && !video.ended && !video.seeking &&
+          Number.isFinite(video.duration) && video.duration > 0 &&
+          video.playbackRate > 0 &&
+          (video.duration - video.currentTime) / video.playbackRate <= exitDuration / 1_000
+        ) {
+          setStageRevealPlayback((current) =>
+            current?.requestId === requestId && current.phase === "playing"
+              ? { ...current, phase: "exiting" }
+              : current,
+          );
+          return;
+        }
+        frameId = window.requestAnimationFrame(checkRemainingTime);
+      };
+      frameId = window.requestAnimationFrame(checkRemainingTime);
+      return () => window.cancelAnimationFrame(frameId);
     }
 
     if (stageRevealPlayback.phase === "exiting") {
@@ -893,13 +976,17 @@ export function Overlay() {
             loop={stageRevealPlayback.loop}
             onEnded={() =>
               setStageRevealPlayback((current) =>
-                current && !current.loop ? { ...current, phase: "exiting" } : current,
+                current && !current.loop && current.phase !== "exiting"
+                  ? { ...current, phase: "exiting" }
+                  : current,
               )
             }
             onError={() => {
               console.error("ステージ動画を再生できませんでした");
               setStageRevealPlayback((current) =>
-                current ? { ...current, phase: "exiting" } : current,
+                current && current.phase !== "exiting"
+                  ? { ...current, phase: "exiting" }
+                  : current,
               );
             }}
             playsInline

@@ -11,6 +11,7 @@ import {
   MATCH_LABEL_MAX_LENGTH,
   requestStageReveal,
   setOverlaySelection,
+  subscribeStageRevealActivity,
 } from "../lib/overlay-state";
 import type { OverlaySelection } from "../lib/overlay-state";
 
@@ -86,6 +87,9 @@ function getAccentColorFromHue(hue: number): string {
 }
 
 export function Dock() {
+  const [stageRevealActive, setStageRevealActive] = useState(false);
+  useEffect(() => subscribeStageRevealActivity(setStageRevealActive), []);
+
   const restoredSelection = useRef(getOverlaySelection());
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [teams, setTeams] = useState<TournamentTeam[]>([]);
@@ -309,7 +313,9 @@ export function Dock() {
   const canSubmitMatchLabel = Boolean(
     submittedSelection && matchLabel !== submittedSelection.matchLabel,
   );
-  const canSubmitStageReveal = Boolean(submittedSelection && ruleId && stageId);
+  const canSubmitStageReveal = Boolean(
+    submittedSelection && ruleId && stageId && !stageRevealActive,
+  );
   const canSubmitAccent = Boolean(
     submittedSelection &&
     isAccentColor(accentColor) &&

@@ -93,6 +93,12 @@ async function readDownloads(root: Locator) {
   );
 }
 
+async function readDefaultDownloads(root: Locator) {
+  return root.evaluate(() =>
+    (window as StageVideoMockWindow).stageVideoMock.requests(true),
+  );
+}
+
 async function assertMatchup(root: Locator): Promise<void> {
   const active = root.locator(".overlay-slide.is-active");
   await expect(
@@ -144,6 +150,32 @@ async function assertPlaying(page: Page, root: Locator): Promise<void> {
   await video.evaluate((element) => (element as HTMLVideoElement).pause());
 }
 
+async function seekAndPlayWithRemainingTime(
+  video: Locator,
+  remainingSeconds: number,
+  playbackRate = 1,
+): Promise<{ duration: number; paused: boolean; ended: boolean }> {
+  return video.evaluate(
+    async (element, { remainingSeconds, playbackRate }) => {
+      const media = element as HTMLVideoElement;
+      media.playbackRate = playbackRate;
+      media.currentTime = media.duration - remainingSeconds;
+      if (media.seeking) {
+        await new Promise<void>((resolve) => {
+          media.addEventListener("seeked", () => resolve(), { once: true });
+        });
+      }
+      await media.play();
+      return {
+        duration: media.duration,
+        paused: media.paused,
+        ended: media.ended,
+      };
+    },
+    { remainingSeconds, playbackRate },
+  );
+}
+
 async function assertRevealSelection(
   root: Locator,
   rule = fixtureData.matchup.rule,
@@ -166,6 +198,31 @@ async function assertRevealSelection(
   );
 }
 
+async function requestStageRevealFromSeparateChannel(
+  page: Page,
+  ruleId: string,
+  stageId: string,
+): Promise<void> {
+  await page.evaluate(
+    ({ ruleId, stageId }) => {
+      const rawSelection = localStorage.getItem("inkling:overlay-selection");
+      if (rawSelection === null) throw new Error("Missing overlay selection.");
+      const selection = {
+        ...(JSON.parse(rawSelection) as Record<string, unknown>),
+        ruleId,
+        stageId,
+      };
+      const channel = new BroadcastChannel("inkling:overlay");
+      channel.postMessage({ type: "selection", selection });
+      channel.postMessage({
+        type: "stage-reveal",
+        request: { requestId: crypto.randomUUID(), ruleId, stageId },
+      });
+    },
+    { ruleId, stageId },
+  );
+}
+
 test("Debugでルール・ステージを選び直しても同じ動画を維持し、元の表示に戻せる", async ({
   page,
   api,
@@ -175,6 +232,9 @@ test("Debugでルール・ステージを選び直しても同じ動画を維持
     .getByRole("button", { name: "ステージ・ルール紹介", exact: true })
     .click();
   await expect.poll(() => readDownloads(root)).toHaveLength(1);
+  expect((await readDownloads(root))[0]?.url).toBe(
+    "https://inkling-obs-streamkit.toy101-mov.org/stage-video/stage-1.webm",
+  );
   await completeDownload(page, root);
   await assertPlaying(page, root);
   const video = root.getByLabel("選択ステージ紹介動画");
@@ -272,6 +332,12 @@ test("Debugでルール・ステージを選び直しても同じ動画を維持
     void (element as HTMLVideoElement).play();
   });
   await expect(video).toHaveJSProperty("paused", false);
+  const nearEndState = await seekAndPlayWithRemainingTime(video, 0.05);
+  expect(nearEndState.duration).toBeGreaterThan(20);
+  expect(nearEndState).toMatchObject({ paused: false, ended: false });
+  await page.clock.runFor(50);
+  await expect(root.locator(".overlay-stage-reveal.is-playing")).toBeVisible();
+  await expect(video).toHaveJSProperty("loop", true);
 });
 
 test("Debugの選択は取得中・遷移中も変更でき、通常の紹介には適用しない", async ({
@@ -309,11 +375,17 @@ test("Debugの選択は取得中・遷移中も変更でき、通常の紹介に
   await assertRevealSelection(root, secondRule);
   expect(await readDownloads(root)).toHaveLength(1);
 
+  const submit = page.getByRole("button", {
+    name: "確定・動画再生",
+    exact: true,
+  });
+  await expect(submit).toBeDisabled();
   await page.getByRole("button", { name: "対戦カード", exact: true }).click();
+  await page.clock.runFor(149);
+  await expect(submit).toBeDisabled();
   await page.clock.runFor(1);
-  await page
-    .getByRole("button", { name: "確定・動画再生", exact: true })
-    .click();
+  await expect(submit).toBeEnabled();
+  await submit.click();
   await expect.poll(() => readDownloads(root)).toHaveLength(2);
   await completeDownload(page, root, 1);
   await assertPlaying(page, root);
@@ -350,6 +422,9 @@ test("動画のヘッダーと本文の完了後だけ選択した紹介を開�
     stageId: secondStage.id,
   });
   await expect.poll(() => readDownloads(root)).toHaveLength(1);
+  expect((await readDownloads(root))[0]?.url).toBe(
+    "https://inkling-obs-streamkit.toy101-mov.org/stage-video/stage-2.webm",
+  );
   await page.clock.fastForward(1_000);
   await assertNoReveal(root);
   await assertMatchup(root);
@@ -409,12 +484,17 @@ for (const event of ["ended", "error"] as const) {
     if (event === "error")
       api.allowConsoleError("ステージ動画を再生できませんでした");
     const root = await prepareDebug(page, api);
-    await page
-      .getByRole("button", { name: "確定・動画再生", exact: true })
-      .click();
+    const submit = page.getByRole("button", {
+      name: "確定・動画再生",
+      exact: true,
+    });
+    await expect(submit).toBeEnabled();
+    await submit.click();
+    await expect(submit).toBeDisabled();
     await expect.poll(() => readDownloads(root)).toHaveLength(1);
     await completeDownload(page, root);
     await assertPlaying(page, root);
+    await expect(submit).toBeDisabled();
     const sourceUrl = await root
       .getByLabel("選択ステージ紹介動画")
       .getAttribute("src");
@@ -425,13 +505,16 @@ for (const event of ["ended", "error"] as const) {
     await expect(root.locator(".overlay-stage-reveal.is-exiting")).toHaveCount(
       1,
     );
+    await expect(submit).toBeDisabled();
     await page.clock.runFor(149);
     await expect(root.locator(".overlay-stage-reveal.is-exiting")).toHaveCount(
       1,
     );
+    await expect(submit).toBeDisabled();
     await page.clock.runFor(1);
     await assertNoReveal(root);
     await assertMatchup(root);
+    await expect(submit).toBeEnabled();
     await expect
       .poll(() =>
         root.evaluate(
@@ -445,14 +528,249 @@ for (const event of ["ended", "error"] as const) {
     ).toBeVisible();
     expect(api.matchupRequests()).toHaveLength(1);
 
-    await page
-      .getByRole("button", { name: "確定・動画再生", exact: true })
-      .click();
+    await submit.click();
     await expect.poll(() => readDownloads(root)).toHaveLength(2);
     await completeDownload(page, root, 1);
     await assertPlaying(page, root);
   });
 }
+
+for (const {
+  label,
+  reducedMotion,
+  transitionDuration,
+  exitDuration,
+  beforeThreshold,
+  afterThreshold,
+} of [
+  {
+    label: "通常モーション",
+    reducedMotion: "no-preference",
+    transitionDuration: 2_600,
+    exitDuration: 1_800,
+    beforeThreshold: 2.5,
+    afterThreshold: 1,
+  },
+  {
+    label: "reduced motion",
+    reducedMotion: "reduce",
+    transitionDuration: 150,
+    exitDuration: 150,
+    beforeThreshold: 0.5,
+    afterThreshold: 0.1,
+  },
+] as const) {
+  test(`${label}では動画終了前に退出を始め、終了イベントで期限を延長しない`, async ({
+    page,
+    api,
+  }) => {
+    await page.emulateMedia({ reducedMotion });
+    const root = await prepareDebug(page, api);
+    const submit = page.getByRole("button", {
+      name: "確定・動画再生",
+      exact: true,
+    });
+    await submit.click();
+    await expect(submit).toBeDisabled();
+    await expect.poll(() => readDownloads(root)).toHaveLength(1);
+    await completeDownload(page, root);
+
+    await expect(root.locator(".overlay-stage-reveal.is-ready")).toHaveCount(1);
+    await page.clock.runFor(50);
+    await expect(root.locator(".overlay-stage-reveal.is-entering")).toHaveCount(
+      1,
+    );
+    await page.clock.runFor(transitionDuration);
+    const reveal = root.locator(".overlay-stage-reveal");
+    await expect(reveal).toHaveClass(/is-playing/);
+    const video = root.getByLabel("選択ステージ紹介動画");
+
+    const beforeState = await seekAndPlayWithRemainingTime(
+      video,
+      beforeThreshold,
+    );
+    expect(beforeState.duration).toBeGreaterThan(20);
+    expect(beforeState).toMatchObject({ paused: false, ended: false });
+    await page.clock.runFor(20);
+    await expect(reveal).toHaveClass(/is-playing/);
+
+    const afterState = await seekAndPlayWithRemainingTime(
+      video,
+      afterThreshold,
+    );
+    expect(afterState).toMatchObject({ paused: false, ended: false });
+    await page.clock.runFor(20);
+    const exitStartState = await reveal.evaluate((element) => {
+      const video = element.querySelector("video");
+      if (!(video instanceof HTMLVideoElement)) {
+        throw new Error("Missing stage reveal video.");
+      }
+      return {
+        exiting: element.classList.contains("is-exiting"),
+        paused: video.paused,
+        ended: video.ended,
+      };
+    });
+    expect(exitStartState).toEqual({
+      exiting: true,
+      paused: false,
+      ended: false,
+    });
+    await expect(submit).toBeDisabled();
+
+    const firstHalf = Math.floor(exitDuration / 2);
+    await page.clock.runFor(firstHalf);
+    await video.dispatchEvent("ended", { bubbles: false });
+    await page.clock.runFor(exitDuration - firstHalf - 1);
+    await expect(reveal).toHaveClass(/is-exiting/);
+    await expect(submit).toBeDisabled();
+    await page.clock.runFor(1);
+    await assertNoReveal(root);
+    await expect(submit).toBeEnabled();
+  });
+}
+
+test("未配置のステージは既定動画の本文完了を待って紹介を再生する", async ({
+  page,
+  api,
+}) => {
+  const root = await prepareDebug(page, api);
+  await expect.poll(() => readDefaultDownloads(root)).toHaveLength(1);
+  expect((await readDefaultDownloads(root))[0]?.url).toBe("/stage-background-default.webm");
+  await page.getByRole("button", { name: "確定・動画再生", exact: true }).click();
+  await expect.poll(() => readDownloads(root)).toHaveLength(1);
+  await root.evaluate(() =>
+    (window as StageVideoMockWindow).stageVideoMock.respond(0, 404),
+  );
+  await page.clock.runFor(1);
+  expect(await readDefaultDownloads(root)).toHaveLength(1);
+  await root.evaluate(() =>
+    (window as StageVideoMockWindow).stageVideoMock.respond(0, 200, true),
+  );
+  await page.clock.fastForward(1_000);
+  await assertNoReveal(root);
+  await assertMatchup(root);
+  expect(
+    await root.evaluate(() =>
+      (window as StageVideoMockWindow).stageVideoMock.createdUrls,
+    ),
+  ).toEqual([]);
+  await root.evaluate(() =>
+    (window as StageVideoMockWindow).stageVideoMock.finishBody(0, true),
+  );
+  await assertPlaying(page, root);
+  await assertRevealSelection(root);
+  expect(await readDownloads(root)).toHaveLength(1);
+  expect(await readDefaultDownloads(root)).toHaveLength(1);
+});
+
+test("既定動画も未配置なら紹介を開始せず、再帰的に取得しない", async ({
+  page,
+  api,
+}) => {
+  api.allowConsoleError("既定ステージ動画のダウンロードに失敗しました: 404");
+  const root = await prepareDebug(page, api);
+  await page.getByRole("button", { name: "確定・動画再生", exact: true }).click();
+  await expect.poll(() => readDownloads(root)).toHaveLength(1);
+  await root.evaluate(() =>
+    (window as StageVideoMockWindow).stageVideoMock.respond(0, 404),
+  );
+  await page.clock.runFor(1);
+  await root.evaluate(() =>
+    (window as StageVideoMockWindow).stageVideoMock.respond(0, 404, true),
+  );
+  await expect.poll(async () => (await readDownloads(root))[0]?.aborted).toBe(true);
+  await page.clock.fastForward(1_000);
+  await assertNoReveal(root);
+  await assertMatchup(root);
+  expect(await readDownloads(root)).toHaveLength(1);
+  expect(await readDefaultDownloads(root)).toHaveLength(1);
+});
+
+test("先読み完了後は既定動画を再取得せず繰り返し再生する", async ({ page, api }) => {
+  const root = await prepareDebug(page, api);
+  await expect.poll(() => readDefaultDownloads(root)).toHaveLength(1);
+  await root.evaluate(() => {
+    const mock = (window as StageVideoMockWindow).stageVideoMock;
+    mock.respond(0, 200, true);
+    mock.finishBody(0, true);
+  });
+  await expect.poll(async () => (await readDefaultDownloads(root))[0]?.bodyRead).toBe(true);
+  await assertNoReveal(root);
+
+  for (let index = 0; index < 2; index += 1) {
+    await page.getByRole("button", { name: "確定・動画再生", exact: true }).click();
+    await expect.poll(() => readDownloads(root)).toHaveLength(index + 1);
+    await root.evaluate((_element, index) =>
+      (window as StageVideoMockWindow).stageVideoMock.respond(index, 404), index,
+    );
+    await assertPlaying(page, root);
+    await root.getByLabel("選択ステージ紹介動画").dispatchEvent("ended");
+    await page.clock.runFor(150);
+    await assertNoReveal(root);
+  }
+  expect(await readDefaultDownloads(root)).toHaveLength(1);
+  await expect.poll(() => root.evaluate(() =>
+    (window as StageVideoMockWindow).stageVideoMock.revokedUrls.length,
+  )).toBe(2);
+});
+
+test("先読み失敗は画面を止めず、404時に既定動画の取得を再試行する", async ({ page, api }) => {
+  const root = await prepareDebug(page, api);
+  await expect.poll(() => readDefaultDownloads(root)).toHaveLength(1);
+  await root.evaluate(() =>
+    (window as StageVideoMockWindow).stageVideoMock.failNetwork(0, true),
+  );
+  await page.clock.runFor(1);
+  await assertMatchup(root);
+  await page.getByRole("button", { name: "確定・動画再生", exact: true }).click();
+  await expect.poll(() => readDownloads(root)).toHaveLength(1);
+  await root.evaluate(() =>
+    (window as StageVideoMockWindow).stageVideoMock.respond(0, 404),
+  );
+  await expect.poll(() => readDefaultDownloads(root)).toHaveLength(2);
+  await root.evaluate(() => {
+    const mock = (window as StageVideoMockWindow).stageVideoMock;
+    mock.respond(1, 200, true);
+    mock.finishBody(1, true);
+  });
+  await assertPlaying(page, root);
+});
+
+test("既定動画待機中に紹介を切り替えても先読みを維持し、古い紹介を再生しない", async ({ page, api }) => {
+  const root = await prepareDebug(page, api);
+  const submit = page.getByRole("button", { name: "確定・動画再生", exact: true });
+  await submit.click();
+  await expect.poll(() => readDownloads(root)).toHaveLength(1);
+  await root.evaluate(() =>
+    (window as StageVideoMockWindow).stageVideoMock.respond(0, 404),
+  );
+  await page.clock.runFor(1);
+  await page.getByLabel("ステージ", { exact: true }).selectOption(secondStage.id);
+  await expect(submit).toBeDisabled();
+  await requestStageRevealFromSeparateChannel(
+    page,
+    fixtureData.matchup.rule.id,
+    secondStage.id,
+  );
+  await expect.poll(() => readDownloads(root)).toHaveLength(2);
+  await completeDownload(page, root, 1);
+  await assertPlaying(page, root);
+  const source = await root.getByLabel("選択ステージ紹介動画").getAttribute("src");
+  await root.evaluate(() => {
+    const mock = (window as StageVideoMockWindow).stageVideoMock;
+    mock.respond(0, 200, true);
+    mock.finishBody(0, true);
+  });
+  await expect.poll(async () => (await readDefaultDownloads(root))[0]?.bodyRead).toBe(true);
+  await page.clock.runFor(1);
+  await assertRevealSelection(root, fixtureData.matchup.rule, secondStage);
+  await expect(root.getByLabel("選択ステージ紹介動画")).toHaveAttribute("src", source ?? "");
+  expect((await readDefaultDownloads(root))[0]?.aborted).toBe(false);
+  expect(await root.evaluate(() =>
+    (window as StageVideoMockWindow).stageVideoMock.createdUrls.length,
+  )).toBe(1);
+});
 
 for (const failure of ["http", "network"] as const) {
   test(`動画の${failure}失敗時は紹介を開始せず、対戦表示を維持して再試行できる`, async ({
@@ -465,9 +783,12 @@ for (const failure of ["http", "network"] as const) {
         : "Failed to fetch",
     );
     const root = await prepareDebug(page, api);
-    await page
-      .getByRole("button", { name: "確定・動画再生", exact: true })
-      .click();
+    const submit = page.getByRole("button", {
+      name: "確定・動画再生",
+      exact: true,
+    });
+    await submit.click();
+    await expect(submit).toBeDisabled();
     await expect.poll(() => readDownloads(root)).toHaveLength(1);
     await root.evaluate((_element, failure) => {
       const mock = (window as StageVideoMockWindow).stageVideoMock;
@@ -481,6 +802,7 @@ for (const failure of ["http", "network"] as const) {
     await page.clock.fastForward(1_000);
     await assertNoReveal(root);
     await assertMatchup(root);
+    await expect(submit).toBeEnabled();
     expect(
       await root.evaluate(
         () => (window as StageVideoMockWindow).stageVideoMock.createdUrls,
@@ -488,9 +810,7 @@ for (const failure of ["http", "network"] as const) {
     ).toEqual([]);
     expect(api.matchupRequests()).toHaveLength(1);
 
-    await page
-      .getByRole("button", { name: "確定・動画再生", exact: true })
-      .click();
+    await submit.click();
     await expect.poll(() => readDownloads(root)).toHaveLength(2);
     await completeDownload(page, root, 1);
     await assertPlaying(page, root);
@@ -585,7 +905,8 @@ test("連続要求は古い本文ダウンロードを中断し、遅い完了�
   await page
     .getByLabel("ステージ", { exact: true })
     .selectOption(secondStage.id);
-  await submit.click();
+  await expect(submit).toBeDisabled();
+  await requestStageRevealFromSeparateChannel(page, secondRule.id, secondStage.id);
   await expect.poll(() => readDownloads(root)).toHaveLength(2);
   expect((await readDownloads(root))[0]).toMatchObject({
     hasAbortSignal: true,
@@ -648,9 +969,12 @@ test("別ページのDock要求もBroadcastChannelでOverlayへ届き、Blob動�
     await page
       .getByLabel("ステージ", { exact: true })
       .selectOption(secondStage.id);
-    await page
-      .getByRole("button", { name: "確定・動画再生", exact: true })
-      .click();
+    const submit = page.getByRole("button", {
+      name: "確定・動画再生",
+      exact: true,
+    });
+    await submit.click();
+    await expect(submit).toBeDisabled();
     await expect.poll(() => readDownloads(root)).toHaveLength(1);
     await assertNoReveal(root);
     expect(api.matchupRequests()).toHaveLength(0);
@@ -661,9 +985,21 @@ test("別ページのDock要求もBroadcastChannelでOverlayへ届き、Blob動�
     });
     await completeDownload(overlayPage, root);
     await assertPlaying(overlayPage, root);
+    await expect(submit).toBeDisabled();
     await expect(
       root.getByRole("region", { name: "選択ステージ" }),
     ).toContainText(secondStage.name);
+    await page.reload();
+    const reloadedSubmit = page.getByRole("button", {
+      name: "確定・動画再生",
+      exact: true,
+    });
+    await expect(reloadedSubmit).toBeDisabled();
+    await root.getByLabel("選択ステージ紹介動画").dispatchEvent("ended");
+    await overlayPage.clock.runFor(149);
+    await expect(reloadedSubmit).toBeDisabled();
+    await overlayPage.clock.runFor(1);
+    await expect(reloadedSubmit).toBeEnabled();
   } finally {
     overlayApi.assertNoBrowserErrors();
     await overlayPage.close();

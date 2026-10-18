@@ -29,12 +29,15 @@ export type StageRevealRequest = {
 
 type OverlayMessage =
   | { type: "selection"; selection: OverlaySelection | null }
-  | { type: "stage-reveal"; request: StageRevealRequest };
+  | { type: "stage-reveal"; request: StageRevealRequest }
+  | { type: "stage-reveal-activity"; overlayId: string; active: boolean }
+  | { type: "stage-reveal-activity-request" };
 
 type Listener = (selection: OverlaySelection | null) => void;
 type StageRevealListener = (request: StageRevealRequest) => void;
 
 const senderChannel = new BroadcastChannel(CHANNEL_NAME);
+const overlayInstanceId = crypto.randomUUID();
 
 function normalizeAccentColor(value: unknown): string {
   return isAccentColor(value) ? value.toLowerCase() : DEFAULT_ACCENT_COLOR;
@@ -130,6 +133,14 @@ function parseOverlayMessage(value: unknown): OverlayMessage | null {
       const request = parseStageRevealRequest(value["request"]);
       return request ? { type: "stage-reveal", request } : null;
     }
+    case "stage-reveal-activity": {
+      const overlayId = getString(value, "overlayId");
+      return overlayId && typeof value["active"] === "boolean"
+        ? { type: "stage-reveal-activity", overlayId, active: value["active"] }
+        : null;
+    }
+    case "stage-reveal-activity-request":
+      return { type: "stage-reveal-activity-request" };
     default:
       return null;
   }
@@ -202,5 +213,32 @@ export function subscribeStageReveal(listener: StageRevealListener): () => void 
     if (message.type === "stage-reveal") {
       listener(message.request);
     }
+  });
+}
+
+export function publishStageRevealActivity(active: boolean): void {
+  postOverlayMessage({ type: "stage-reveal-activity", overlayId: overlayInstanceId, active });
+}
+
+export function subscribeStageRevealActivity(
+  listener: (active: boolean) => void,
+): () => void {
+  const activeOverlays = new Set<string>();
+  const unsubscribe = subscribeOverlayMessages((message) => {
+    if (message.type !== "stage-reveal-activity") return;
+    if (message.active) activeOverlays.add(message.overlayId);
+    else activeOverlays.delete(message.overlayId);
+    listener(activeOverlays.size > 0);
+  });
+  // A Dock opened during playback needs the current state, not a stored event.
+  postOverlayMessage({ type: "stage-reveal-activity-request" });
+  return unsubscribe;
+}
+
+export function subscribeStageRevealActivityRequest(
+  listener: () => void,
+): () => void {
+  return subscribeOverlayMessages((message) => {
+    if (message.type === "stage-reveal-activity-request") listener();
   });
 }
