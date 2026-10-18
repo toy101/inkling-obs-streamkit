@@ -35,6 +35,7 @@ export type StageRevealAcknowledgement = {
 export const STAGE_REVEAL_ACK_TIMEOUT_MS = 2_000;
 const STAGE_REVEAL_ACTIVITY_QUERY_WINDOW_MS = 300;
 const STAGE_REVEAL_ACTIVITY_QUERY_INTERVAL_MS = 1_000;
+const STAGE_REVEAL_ACTIVITY_EXPIRY_MS = 5_000;
 
 type OverlayMessage =
   | { type: "selection"; selection: OverlaySelection | null }
@@ -245,7 +246,7 @@ export function publishStageRevealActivity(active: boolean, queryId: string | nu
 export function subscribeStageRevealActivity(
   listener: (active: boolean | null) => void,
 ): () => void {
-  const activeOverlays = new Set<string>();
+  const activeOverlays = new Map<string, number>();
   let currentQueryId = "";
   let collecting = true;
   let receivedResponse = false;
@@ -257,6 +258,13 @@ export function subscribeStageRevealActivity(
     receivedResponse = false;
     collectionTimeoutId = window.setTimeout(() => {
       collecting = false;
+      // Allow missed inquiries, but expire sources that vanished without an idle event.
+      const now = performance.now();
+      for (const [overlayId, lastSeenAt] of activeOverlays) {
+        if (now - lastSeenAt >= STAGE_REVEAL_ACTIVITY_EXPIRY_MS) {
+          activeOverlays.delete(overlayId);
+        }
+      }
       listener(activeOverlays.size > 0 ? true : receivedResponse ? false : null);
     }, STAGE_REVEAL_ACTIVITY_QUERY_WINDOW_MS);
     postOverlayMessage({ type: "stage-reveal-activity-request", queryId: currentQueryId });
@@ -267,7 +275,7 @@ export function subscribeStageRevealActivity(
     if (!message.active && message.queryId !== null && message.queryId !== currentQueryId) return;
     if (message.queryId === currentQueryId) receivedResponse = true;
     if (message.active) {
-      activeOverlays.add(message.overlayId);
+      activeOverlays.set(message.overlayId, performance.now());
       listener(true);
     } else {
       activeOverlays.delete(message.overlayId);

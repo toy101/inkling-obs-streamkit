@@ -37,6 +37,8 @@ After mounting, Overlay preloads the default background video without blocking i
 
 During a stage reveal, Overlay ignores duplicate playback requests and applies the latest matchup or display-setting changes after the reveal finishes. If an Overlay does not acknowledge a request, Dock ends the pending wait and reports the missing response. State inquiries continue automatically so playback controls recover when the source returns, without reloading Dock.
 
+An Overlay's active status expires after five seconds without a response, allowing recovery after a source crashes without sending an end notification. Dock keeps playback disabled until another Overlay responds as idle.
+
 Choose the development data source from the repository root with Bun:
 
 ```bash

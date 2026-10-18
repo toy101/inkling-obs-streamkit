@@ -198,6 +198,47 @@ test("応答のない要求はタイムアウトし、Overlay復帰後に再読�
   await expect(submit).toBeEnabled();
 });
 
+test("終了通知なしで消えたOverlayは失効し、別Overlayの復帰後に再送信できる", async ({ page }) => {
+  await page.goto("/?view=dock");
+  await waitForDock(page);
+  const submit = page.getByRole("button", { name: "確定・動画再生", exact: true });
+  await publishActivity(page, true, "crashed-overlay");
+  await expect(submit).toBeDisabled();
+  const inquiryCount = await page.evaluate(() => {
+    const mock = (window as ActivityMockWindow).activityMock;
+    // Simulate a crash: this source disappears without publishing idle.
+    delete mock.responders["crashed-overlay"];
+    return mock.inquiries;
+  });
+  await publishActivity(page, false, "replacement-overlay");
+  await expect.poll(() => page.evaluate(() =>
+    (window as ActivityMockWindow).activityMock.inquiries,
+  )).toBeGreaterThan(inquiryCount);
+  // One missed response must not immediately discard known activity.
+  await expect(submit).toBeDisabled();
+  await expect(submit).toBeEnabled({ timeout: 7_000 });
+  await submit.click();
+  await expect.poll(() => page.evaluate(() =>
+    (window as ActivityMockWindow).activityMock.requests.length,
+  )).toBe(1);
+});
+
+test("応答を続けるOverlayの紹介は有効期限を越えても再生ボタンを無効に保つ", async ({ page }) => {
+  await page.goto("/?view=dock");
+  await waitForDock(page);
+  const submit = page.getByRole("button", { name: "確定・動画再生", exact: true });
+  await publishActivity(page, true);
+  const inquiryCount = await page.evaluate(() =>
+    (window as ActivityMockWindow).activityMock.inquiries,
+  );
+  await expect.poll(() => page.evaluate(() =>
+    (window as ActivityMockWindow).activityMock.inquiries,
+  ), { timeout: 9_000 }).toBeGreaterThan(inquiryCount + 6);
+  await expect(submit).toBeDisabled();
+  await publishActivity(page, false);
+  await expect(submit).toBeEnabled();
+});
+
 test("複数Overlayでは先着idleで有効化せず、古い照会のidleも無視する", async ({ page }) => {
   await page.goto("/?view=dock");
   await waitForDock(page);
