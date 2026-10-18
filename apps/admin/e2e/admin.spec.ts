@@ -60,8 +60,8 @@ function json(route: Route, body: unknown, status = 200) {
   return route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) })
 }
 
-async function mockApi(page: Page, state: MockState, apiPort = 8787) {
-  await page.route(`http://127.0.0.1:${apiPort}/**`, async (route) => {
+async function mockApi(page: Page, state: MockState, apiUrl = 'http://127.0.0.1:8787') {
+  await page.route(`${apiUrl}/**`, async (route) => {
     const request = route.request()
     const url = new URL(request.url())
     const path = url.pathname
@@ -275,14 +275,14 @@ test('起動時のローカル接続先を表示し、APIの環境不一致を�
 test('本番指定で起動すると本番接続先を維持して登録できる', async ({ page }) => {
   const state: MockState = { environment: 'production', failNextPlayerSave: false, players: [], tournaments: [], teams: [] }
   const unexpectedRequests: string[] = []
-  await mockApi(page, state, 3000)
-  await page.route('http://127.0.0.1:8787/**', async (route) => {
+  await mockApi(page, state, 'https://api.example.test')
+  await page.route(/^http:\/\/127\.0\.0\.1:(3000|8787)\//, async (route) => {
     unexpectedRequests.push(route.request().url())
     await route.abort()
   })
   await page.goto('http://127.0.0.1:5176/')
   await expect(page.locator('.environment-badge')).toHaveText('本番環境 D1')
-  await expect(page.locator('.api-url code')).toHaveText('http://127.0.0.1:3000')
+  await expect(page.locator('.api-url code')).toHaveText('https://api.example.test')
   await expect(page.getByRole('button', { name: 'ローカル D1', exact: true })).toHaveCount(0)
   await expect(page.getByRole('button', { name: '本番環境 D1', exact: true })).toHaveCount(0)
   await expect(page.getByRole('alert')).toContainText('本番データへ接続します')

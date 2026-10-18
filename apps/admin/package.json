@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "dev:d1": "VITE_ADMIN_TARGET=local bun run dev",
-    "dev:d1:remote": "VITE_ADMIN_TARGET=production bun run dev",
+    "dev:production": "VITE_ADMIN_TARGET=production bun run dev",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",

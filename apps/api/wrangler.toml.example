@@ -6,6 +6,10 @@ compatibility_date = "2026-09-28"
 CATALOG_URL = "https://inkling-obs-streamkit.toy101-mov.org/"
 CORS_ALLOWED_ORIGINS = "https://<WEB_WORKER_DOMAIN>"
 IKACLO_API_ORIGIN = "https://<IKACLO_API_DOMAIN>"
+# Local Admin connects directly to this deployed API.
+ADMIN_ENVIRONMENT = "production"
+ADMIN_ALLOWED_ORIGINS = "http://localhost:5174,http://127.0.0.1:5174"
+# Configure ADMIN_API_TOKEN with `wrangler secret put`, never as a plain-text var.
 
 [[d1_databases]]
 binding = "DB"

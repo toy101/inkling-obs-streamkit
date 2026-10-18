@@ -69,25 +69,26 @@ bun run dev:d1    # Web :5173 + API Worker :8787。ローカル D1 を参照
 
 ```bash
 bun run dev:admin:local       # ローカル D1: API :8787 / Web :5173 / Admin :5174
-bun run dev:admin:production  # 本番 D1: ローカル API Worker :3000 / Web :5173 / Admin :5174
+bun run dev:admin:production  # 本番 D1: デプロイ済み API Worker / ローカル Admin :5174 のみ
 ```
 
-チーム状態の変更を使う前に、既存 D1 へ追加マイグレーションを適用する。ローカルは `dev:admin:local` の起動時に自動適用され、本番は API を停止して `bun run db:migrate:production` を実行してから再起動する。009 で状態列を追加し、010 で既存名簿の人数から状態を設定する。大会・チーム・参加者・名簿は削除しない。旧 `roster_locked_at` 列は互換性のため残るが、アプリの判定には使わない。既存 JSON の旧形式も人数から状態へ読み替える。
+チーム状態の変更を使う前に、既存 D1 へ追加マイグレーションを適用する。ローカルは `dev:admin:local` の起動時に自動適用され、本番は新機能を使う前に、別途 `bun run db:migrate:production` で未適用分を反映する。009 で状態列を追加し、010 で既存名簿の人数から状態を設定する。大会・チーム・参加者・名簿は削除しない。旧 `roster_locked_at` 列は互換性のため残るが、アプリの判定には使わない。既存 JSON の旧形式も人数から状態へ読み替える。
 
-本番接続では Wrangler の OAuth 認証と D1 バインディングを使う。Admin → ローカル API Worker → 本番 D1 の構成になり、API のコードを Cloudflare へデプロイせずに入力・更新できる。Cloudflare API トークンを手動発行する必要はない。次のコマンドはリポジトリのルートから実行する。
+本番接続は Admin → デプロイ済み API Worker → 本番 D1 の構成。ローカルでは Admin だけを起動し、Web と API はデプロイ済みの本番環境を利用する。特記のないコマンドはリポジトリのルートから実行する。
 
-1. 旧 HTTP 方式の認証・アカウント設定がある場合、ログイン前に `apps/api/.env.local` の `CLOUDFLARE_API_TOKEN`、`CLOUDFLARE_ACCOUNT_ID`、API key/email と `CF_` 別名を削除またはコメントアウトし、シェル環境からも `unset` する。`bun install` の後、`bun run cf:login` でブラウザからログインし、`bun run cf:whoami` で接続するアカウントを確認する。
-2. 初回だけ `cp apps/api/wrangler.production.example.toml apps/api/wrangler.production.toml` を実行する。コピー先の `account_id`、`env.production.d1_databases` の `database_name` と `database_id` を、本番 D1 の値へ置き換える。`remote = true` は維持する。ローカル専用の `wrangler.local.toml` はそのまま使う。
-3. `apps/api/.env.local` に `CATALOG_URL`、`IKACLO_API_ORIGIN`、`ADMIN_API_TOKEN` を設定する。カタログ URL と画像の origin は、既に使っている設定をそのまま利用できる。管理トークンは Cloudflare のログイン情報とは別で、Admin への接続に使う。旧 HTTP 方式の `CLOUDFLARE_API_TOKEN`、`CLOUDFLARE_ACCOUNT_ID`、`CF_` 別名などを `.env.local` やシェル環境から外す。本番コマンドは OAuth の接続先を上書きする設定が残っていると接続前に停止する。
-4. `bun run db:check:production` で対象 DB とマイグレーション履歴を確認する。続いて `bun run db:migrate:production` で未適用分を反映する。この段階から本番 DB を変更する。
-5. `bun run dev:admin:production` を実行する。設定から `apps/api/.dev.vars.production` を生成し、Wrangler のローカル API Worker を起動する。起動時にマイグレーションや開発データ投入は実行しない。
-6. `http://127.0.0.1:5174` を開き、接続先が「本番環境 D1」と表示されていることを確認し、`ADMIN_API_TOKEN` の値で接続する。参加者 → 大会 → チームを登録し、4人の名簿を揃えると確定チームになる。Cloudflare の D1 Console でも登録した行を確認できる。
+1. `apps/admin/.env.local` の `VITE_PRODUCTION_API_URL` にデプロイ済み API Worker の HTTPS URL を設定する。Web の URL ではなく API の URL を指定する。本番接続先には localhost の既定値を持たせない。
+2. デプロイ済み API の `DB` に本番 D1 をバインドする。設定例に従い、`apps/api/wrangler.toml` の `[vars]` に `ADMIN_ENVIRONMENT = "production"` と `ADMIN_ALLOWED_ORIGINS = "http://localhost:5174,http://127.0.0.1:5174"` を指定する。これらは Worker の既定値でもある。`CORS_ALLOWED_ORIGINS` はデプロイ済み Web の origin のままでよく、API が Admin の origin も CORS 許可対象へ追加する。
+3. **デプロイ済み API Worker** の [Cloudflare Secret](https://developers.cloudflare.com/workers/configuration/secrets/) に `ADMIN_API_TOKEN` を登録して管理ルートを有効にする。`apps/api/` で `bun run wrangler secret put ADMIN_API_TOKEN --config wrangler.toml` を実行し、十分に長いランダムなトークンを入力する。このコマンドは新しい Worker バージョンを即時デプロイする。ローカルの `.env.local` や `.dev.vars.production` に設定するだけでは、デプロイ済み Worker には反映されない。Worker のコードや変数の値も変更した場合は、`bun run wrangler deploy --config wrangler.toml` で反映する。
+4. `bun run dev:admin:production` を実行する。`http://127.0.0.1:5174` の Admin だけを起動する。Web・API の起動、Cloudflare へのログイン、D1 マイグレーション、開発データ投入は行わない。
+5. 画面の API URL と「本番環境 D1」の表示を確認し、同じ `ADMIN_API_TOKEN` を入力して接続する。Worker のトークンが未設定なら 404、不正なトークンなら 401、Admin の許可対象外の origin なら 403 が返る。
+
+Wrangler OAuth が必要なのは、デプロイ・Secret 登録・DB 保守のとき。通常の Admin 起動には不要。既存の `db:check:production`、`db:migrate:production`、seed コマンドは引き続き Git 管理外の `apps/api/wrangler.production.toml` を使う。`wrangler.production.example.toml` をコピーし、`env.production` に同じ本番アカウントと D1 を設定して `remote = true` を維持する。保守前に `bun run cf:login` / `bun run cf:whoami` を実行する。旧 HTTP 認証の `CLOUDFLARE_*` / `CF_*` 設定を理由に拒否された場合は、それらの上書き設定を外す。
 
 `db:migrate:production` は Wrangler 標準の `d1_migrations` に履歴を保存する。従来の `schema_migrations` がある場合は、既知の適用済みファイルを確認して履歴だけを引き継ぐ。履歴のない既存テーブルや未知のマイグレーションが見つかった場合は、自動適用を止める。設定ファイル・生成した秘密情報は Git 管理外に置く。
 
 接続先は起動時の `VITE_ADMIN_TARGET` で固定する。`dev:admin:local` はローカル、`dev:admin:production` は本番を指定し、画面には現在の環境と API URL を表示する。接続先 URL は Admin の `VITE_LOCAL_API_URL` と `VITE_PRODUCTION_API_URL` で設定できる。環境を変更するときは対応する起動コマンドで再起動する。管理画面は `/admin/status` で API が返す環境と起動設定を照合し、一致した接続でのみ保存を許可する。切断時は認証情報・表示データ・編集中の内容を解除する。
 
-管理トークンはブラウザのメモリだけで保持し、Cloudflare の認証情報は API プロセスだけに置く。`VITE_` 変数へトークンを設定しない。API は `ADMIN_ALLOWED_ORIGINS` の origin と Bearer トークンを検証し、トークン未設定または JSON モードでは管理操作を拒否する。公開 API Worker も管理トークン未設定なら管理操作を受け付けない。
+管理トークンはブラウザのメモリだけで保持し、API Worker 側では Secret として設定する。Cloudflare の認証情報はデプロイ・保守ツールだけで扱う。`VITE_` 変数へトークンを設定しない。API は `ADMIN_ALLOWED_ORIGINS` の origin と Bearer トークンを検証し、トークン未設定または JSON モードでは管理操作を拒否する。公開 API Worker も管理トークン未設定なら管理操作を受け付けない。
 
 保存したデータは既存の Web API と Overlay が読む D1 の同じテーブルへ反映される。既に開いている Dock / Overlay に再取得させるには、そのページを再読み込みする。従来の `bun dev`、`dev:json`、`dev:d1` は Web と API だけを起動する。
 
@@ -191,19 +192,19 @@ Elysiaのルートスキーマから`@elysia/openapi`でOpenAPI文書を生成�
 
 Elysia のルートとレスポンススキーマはどちらのモードでも同じ。モデルが固まっていない間は JSON をすぐ編集でき、web 側を保存方式へ依存させずに済む。
 
-D1 を使う場合、ローカルは `dev:d1` または `dev:admin:local`、本番の入力・更新は上記の `dev:admin:production` を使う。どちらも API Worker の `DB` バインディングを利用する。本番の接続先は Git 管理外の `apps/api/wrangler.production.toml` で指定し、Wrangler で認証する。
+D1 を使う場合、ローカルは `dev:d1` または `dev:admin:local`、本番の入力・更新は上記の `dev:admin:production` を使う。どちらも API Worker の `DB` バインディングを利用する。Admin は `VITE_PRODUCTION_API_URL` でデプロイ済み API を指定する。保守コマンドの D1 接続先は Git 管理外の `apps/api/wrangler.production.toml` で指定し、Wrangler で認証する。
 
 SQL マイグレーションは `apps/api/src/db/migrations/` に置く。空の D1 を作成した後とスキーマ変更時に `bun run db:migrate` を実行する。現在の JSON 開発データを空の D1 に投入する場合は、代わりに `D1_SEED_DEVELOPMENT_DATA=1 bun run db:setup` を実行する。seed のバージョンを記録して2回目以降は DB を上書きしないため、初回投入後に JSON を編集しても D1 には反映されない。
 
 **`API_DATA_SOURCE` を切り替えるだけでは既存の Turso データは移らない**。 元の SQLite データベース全体を SQL にエクスポートし、D1 が要求する `BEGIN TRANSACTION` と `COMMIT` の行を除いてから、_空の新規 D1_ へ `wrangler d1 execute <DATABASE_NAME> --remote --file=<DUMP.sql>` でインポートする。全体の dump なら `schema_migrations` と `seed_history` も含まれるため、移行先で先に `db:migrate` や `db:setup` を実行しない。切替前に各テーブルの件数を比較し、確認が済むまでは元の Turso データを残す。dump は Git 管理外に保管する。詳細は [Cloudflare のインポート手順](https://developers.cloudflare.com/d1/best-practices/import-export-data/) を参照。
 
-旧 Bun API の `API_DATA_SOURCE=d1` アダプターも残っているが、これは D1 HTTP query API と `CLOUDFLARE_ACCOUNT_ID`、`D1_DATABASE_ID`、`CLOUDFLARE_API_TOKEN` を使う別経路。現在の本番 Admin 起動・マイグレーション・seed コマンドはこの経路を使わず、Wrangler に統一している。
+旧 Bun API の `API_DATA_SOURCE=d1` アダプターも残っているが、これは D1 HTTP query API と `CLOUDFLARE_ACCOUNT_ID`、`D1_DATABASE_ID`、`CLOUDFLARE_API_TOKEN` を使う別経路。本番 Admin はデプロイ済み API と Bearer トークンを使い、マイグレーション・seed コマンドは Wrangler を使う。
 
 ## Web と API を別々の Cloudflare Worker に配置する準備
 
 `apps/api/src/worker.ts` は Bun 版と同じ Elysia のルート・レスポンス型を、[Elysia の実験的 Cloudflare アダプター](https://elysiajs.com/integrations/cloudflare-worker)で動かす入口。`apps/api/wrangler.local.toml` はローカル開発専用で、デプロイには使わない。`apps/web/wrangler.toml.example` は Vite の成果物を静的配信し、`apps/api/wrangler.toml.example` は既存の D1 をバインドする本番向け設定例。配置前にそれぞれ `wrangler.toml` へコピーし、プレースホルダーを置き換える。JSON 開発コマンドは Wrangler を使わない。
 
-1. 上記の手順で D1 を作成または移行し、API の Wrangler 設定へ **既存の** データベース名と ID を記入する。API Worker は `DB` バインディングを使用する。本番 Admin 用の設定と、公開 API の設定には同じ D1 を指定する。公開 API には `ADMIN_API_TOKEN` を設定せず、管理操作はローカル API で行う。
+1. 上記の手順で D1 を作成または移行し、API の Wrangler 設定へ **既存の** データベース名と ID を記入する。API Worker は `DB` バインディングを使用する。保守用の設定とデプロイ済み API の設定には同じ D1 を指定する。デプロイ済み API には上記の Secret と origin を設定して Admin からの管理操作を有効にする。
 2. API 設定の `CATALOG_URL` と `IKACLO_API_ORIGIN` を設定し、`CORS_ALLOWED_ORIGINS` に最終的な Web Worker の origin を指定する。scheme を含む正確な origin が必要。複数ある場合はカンマで区切る。
 3. `apps/api/` から `bunx wrangler@4.136.3 deploy --config wrangler.toml` で API を配置する。Web のビルド **前** に、例えば `apps/web/.env.production` の `VITE_API_URL` を API Worker の URL に設定する。リポジトリのルートで `bun run --filter web build` を実行し、`apps/web/` から `bunx wrangler@4.136.3 deploy --config wrangler.toml` で Web を配置する。
 4. 配置後の Debug と Overlay を開いて API 通信・CORS を確認し、OBS ブラウザソースも別途確認する。`BroadcastChannel` と `localStorage` のため、Dock・Debug・Overlay は同じ **Web** origin に置く。API は別 origin でよい。
