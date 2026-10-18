@@ -1680,7 +1680,8 @@ html[data-view="overlay"] body {
   font-size: 12px;
 }
 
-.debug-slide-controls button {
+.debug-slide-controls button,
+.debug-stage-reveal-text button {
   padding: 6px 8px;
   color: #fafafa;
   font: inherit;
@@ -1691,12 +1692,14 @@ html[data-view="overlay"] body {
   cursor: pointer;
 }
 
-.debug-slide-controls button:hover:not(:disabled) {
+.debug-slide-controls button:hover:not(:disabled),
+.debug-stage-reveal-text button:hover:not(:disabled) {
   background: #3f3f46;
   border-color: #a78bfa;
 }
 
-.debug-slide-controls button:disabled {
+.debug-slide-controls button:disabled,
+.debug-stage-reveal-text button:disabled {
   color: #71717a;
   cursor: not-allowed;
 }
@@ -1711,6 +1714,53 @@ html[data-view="overlay"] body {
   background: #27272a;
   border: 1px solid #52525b;
   border-radius: 6px;
+}
+
+.debug-stage-reveal-text {
+  flex-shrink: 0;
+  padding: 0 20px 16px;
+}
+
+.debug-stage-reveal-text summary {
+  cursor: pointer;
+}
+
+.debug-stage-reveal-text p {
+  margin: 8px 0;
+  color: #a1a1aa;
+  font-size: 12px;
+}
+
+.debug-stage-reveal-text fieldset {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.debug-stage-reveal-text label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  font-size: 12px;
+}
+
+.debug-stage-reveal-text select {
+  width: 100%;
+  min-width: 0;
+  padding: 6px 8px;
+  color: #fafafa;
+  font: inherit;
+  background: #27272a;
+  border: 1px solid #52525b;
+  border-radius: 6px;
+}
+
+.debug-stage-reveal-text button {
+  align-self: end;
 }
 
 .debug-metrics {

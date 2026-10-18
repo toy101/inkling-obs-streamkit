@@ -48,11 +48,11 @@ Then open <http://localhost:5173/?view=debug>, choose a matchup in the left pane
 
 One Vite app switches views by the `view` query parameter. There is no router.
 
-| View | URL | Purpose |
-| --- | --- | --- |
-| Dock | `http://localhost:5173/?view=dock` | Operator panel. Chooses what the overlay shows. |
-| Overlay | `http://localhost:5173/?view=overlay` | The 1920 × 1080 page that goes on air. |
-| Debug | `http://localhost:5173/?view=debug` | Dock plus a scaled preview of the real overlay page. |
+| View    | URL                                   | Purpose                                              |
+| ------- | ------------------------------------- | ---------------------------------------------------- |
+| Dock    | `http://localhost:5173/?view=dock`    | Operator panel. Chooses what the overlay shows.      |
+| Overlay | `http://localhost:5173/?view=overlay` | The 1920 × 1080 page that goes on air.               |
+| Debug   | `http://localhost:5173/?view=debug`   | Dock plus a scaled preview of the real overlay page. |
 
 Opening the site without `view` just prints the accepted values.
 
@@ -97,10 +97,10 @@ bun run --filter admin test:e2e
 
 ## OBS setup
 
-| Use | URL | Size |
-| --- | --- | --- |
-| Custom Browser Dock | `http://localhost:5173/?view=dock` | any |
-| Browser Source | `http://localhost:5173/?view=overlay` | width 1920 / height 1080 |
+| Use                 | URL                                   | Size                     |
+| ------------------- | ------------------------------------- | ------------------------ |
+| Custom Browser Dock | `http://localhost:5173/?view=dock`    | any                      |
+| Browser Source      | `http://localhost:5173/?view=overlay` | width 1920 / height 1080 |
 
 Keep Chrome's page zoom at 100% when comparing the preview against OBS, and do not add custom CSS to the browser source. A fixed canvas size alone does not guarantee identical rendering across operating systems or Chromium versions — fonts in particular.
 
@@ -109,7 +109,8 @@ Keep Chrome's page zoom at 100% when comparing the preview against OBS, and do n
 - The overlay always renders at **1920 × 1080 px (16:9)**.
 - Debug loads the real `?view=overlay` page in an iframe of exactly that size and shrinks it only with `transform: scale()` on the wrapper. Viewport, `rem` and media query conditions therefore match the production page.
 - Zoom is either "fit" or 25 / 50 / 75 / 100%. Auto fit never scales above 100%. When a manual zoom does not fit, the preview area scrolls.
-- The toolbar can immediately switch the iframe preview to the matchup, either team detail, or next-match rule/stage slide. This is Debug-only and does not alter the OBS Browser Source.
+- The toolbar switches the iframe preview to the matchup or either team detail. “ステージ・ルール紹介” plays the reveal transition, then loops the background video with the applied rule and stage displayed. Select another scene button to stop the preview. These controls are Debug-only and do not alter the OBS Browser Source.
+- Expand “次ステージ・ルールの紹介テキストを上書き” to select a rule and stage from dropdowns using the same catalogs as the Dock. Their names and description update immediately during playback while the same video keeps playing. Choose “再生開始時のルール／ステージ” to restore either original selection, or “元の表示に戻す” to reset both. Overrides affect only the Debug reveal preview and are not saved.
 - The toolbar reports canvas size, aspect ratio, current scale and the scaled display size.
 - The checkerboard behind the overlay exists to verify transparency; it is not part of the stream.
 - The Dock and the iframe stay in sync through a same-origin `BroadcastChannel`, the same path the Dock and the Browser Source use in OBS. `localStorage` only restores the latest selection when a page loads.
@@ -130,22 +131,22 @@ Keep Chrome's page zoom at 100% when comparing the preview against OBS, and do n
 
 ## Commands
 
-| Command | What it does |
-| --- | --- |
-| `bun dev` | Runs the web app and API in parallel. |
-| `bun run dev:apps` | Runs the web app and API in parallel. |
-| `bun run --filter web dev` | Runs one workspace alone (`api` works the same way). |
-| `bun run --filter web lint` | Web ESLint; use `--filter admin lint` for Admin. |
-| `bun run --filter web build` | `tsc -b && vite build`. The only type-check path. |
-| `bun run dev:json` | Starts the Bun API and Web with JSON data. |
-| `bun run dev:d1` | Prepares local D1, then starts the API Worker and Web. |
-| `bun run db:setup:local` | Applies pending migrations and initial data to local D1. |
-| `bun run openapi:build` | Generates the static Scalar viewer and `openapi.yaml` under `dist/openapi/` without starting the API or loading runtime data. |
-| `bun run cf:login` / `bun run cf:whoami` | Sign in through Wrangler and inspect the Cloudflare account. |
-| `bun run db:check:production` | Read-only inspection of the production D1 target, tables, and migration history. |
-| `bun run db:migrate:production` / `bun run db:migrate` | Apply pending migrations through Wrangler to the configured production D1. |
-| `D1_SEED_DEVELOPMENT_DATA=1 bun run db:setup` | Applies migrations and inserts JSON development data once into the configured D1 database. |
-| `bun run spellcheck` | cspell across the repository. The dictionary lives in `cspell.json`. |
+| Command                                                | What it does                                                                                                                  |
+| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| `bun dev`                                              | Runs the web app and API in parallel.                                                                                         |
+| `bun run dev:apps`                                     | Runs the web app and API in parallel.                                                                                         |
+| `bun run --filter web dev`                             | Runs one workspace alone (`api` works the same way).                                                                          |
+| `bun run --filter web lint`                            | Web ESLint; use `--filter admin lint` for Admin.                                                                              |
+| `bun run --filter web build`                           | `tsc -b && vite build`. The only type-check path.                                                                             |
+| `bun run dev:json`                                     | Starts the Bun API and Web with JSON data.                                                                                    |
+| `bun run dev:d1`                                       | Prepares local D1, then starts the API Worker and Web.                                                                        |
+| `bun run db:setup:local`                               | Applies pending migrations and initial data to local D1.                                                                      |
+| `bun run openapi:build`                                | Generates the static Scalar viewer and `openapi.yaml` under `dist/openapi/` without starting the API or loading runtime data. |
+| `bun run cf:login` / `bun run cf:whoami`               | Sign in through Wrangler and inspect the Cloudflare account.                                                                  |
+| `bun run db:check:production`                          | Read-only inspection of the production D1 target, tables, and migration history.                                              |
+| `bun run db:migrate:production` / `bun run db:migrate` | Apply pending migrations through Wrangler to the configured production D1.                                                    |
+| `D1_SEED_DEVELOPMENT_DATA=1 bun run db:setup`          | Applies migrations and inserts JSON development data once into the configured D1 database.                                    |
+| `bun run spellcheck`                                   | cspell across the repository. The dictionary lives in `cspell.json`.                                                          |
 
 ## Web end-to-end and visual regression tests
 
@@ -192,7 +193,7 @@ Use `dev:d1` or `dev:admin:local` for local D1, and the `dev:admin:production` s
 
 SQL migrations live in `apps/api/src/db/migrations/`. Run `bun run db:migrate` once after creating an empty D1 database and after each schema change. To populate an empty database with the current JSON development data, run `D1_SEED_DEVELOPMENT_DATA=1 bun run db:setup` instead. The seed records its version and preserves existing rows on later runs; editing JSON afterward does not update D1.
 
-Existing Turso rows are **not** copied by changing `API_DATA_SOURCE`. Export the complete source SQLite database to SQL, remove its `BEGIN TRANSACTION` and `COMMIT` lines as required by D1, and import that SQL into a *new empty* D1 database with `wrangler d1 execute <DATABASE_NAME> --remote --file=<DUMP.sql>`. Importing the complete dump carries `schema_migrations` and `seed_history`; do not run `db:migrate` or `db:setup` first against the destination. Compare table row counts before switching the API. Keep the dump outside Git and retain the Turso source until the D1 data has been checked. See [Cloudflare's import guide](https://developers.cloudflare.com/d1/best-practices/import-export-data/).
+Existing Turso rows are **not** copied by changing `API_DATA_SOURCE`. Export the complete source SQLite database to SQL, remove its `BEGIN TRANSACTION` and `COMMIT` lines as required by D1, and import that SQL into a _new empty_ D1 database with `wrangler d1 execute <DATABASE_NAME> --remote --file=<DUMP.sql>`. Importing the complete dump carries `schema_migrations` and `seed_history`; do not run `db:migrate` or `db:setup` first against the destination. Compare table row counts before switching the API. Keep the dump outside Git and retain the Turso source until the D1 data has been checked. See [Cloudflare's import guide](https://developers.cloudflare.com/d1/best-practices/import-export-data/).
 
 The legacy Bun API `API_DATA_SOURCE=d1` adapter remains as a separate HTTP query API path requiring `CLOUDFLARE_ACCOUNT_ID`, `D1_DATABASE_ID`, and `CLOUDFLARE_API_TOKEN`. The current production Admin, migration, and seed commands use Wrangler instead.
 
