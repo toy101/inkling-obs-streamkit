@@ -220,6 +220,11 @@ export async function installApiMock(
     }
   });
 
+  await page.route("**/stage-background-default.webm", (route) => route.fulfill({
+    contentType: "video/webm",
+    path: new URL("./fixtures/stage-reveal.webm", import.meta.url).pathname,
+  }));
+
   return {
     ...apiMock,
     assertNoBrowserErrors: () => {

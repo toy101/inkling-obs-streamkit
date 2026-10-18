@@ -8,6 +8,10 @@ if (process.env.CI !== "true") {
 const workspaceRoot = resolve(import.meta.dir, "..");
 const apiDataDirectory = resolve(workspaceRoot, "apps/api/src/data");
 const webPublicDirectory = resolve(workspaceRoot, "apps/web/public");
+const stageRevealVideoFixture = resolve(
+  workspaceRoot,
+  "apps/web/e2e/fixtures/stage-reveal.webm",
+);
 const emptyTournamentData = JSON.stringify(
   {
     tournaments: [],
@@ -40,6 +44,10 @@ await Promise.all([
   Bun.write(
     resolve(webPublicDirectory, "stage-reveal-vignette.png"),
     stageRevealVignette,
+  ),
+  Bun.write(
+    resolve(webPublicDirectory, "stage-background-default.webm"),
+    Bun.file(stageRevealVideoFixture),
   ),
 ]);
 

@@ -31,7 +31,13 @@ bun dev
 
 Run these commands at the repository root. The two `.env.local` files are ignored by Git. D1 credentials stay in the API process and outside Vite; `VITE_API_URL` is intentionally public because the browser needs it.
 
-The API reads player and tournament JSON under `apps/api/src/data/` by default, so database setup is unnecessary while the data model is being adjusted. Before the apps start, a preparation script downloads any missing runtime assets: the weapon, rule and stage catalogs go under `apps/api/src/data/`, while the stage-reveal vignette goes under `apps/web/public/`. Existing files are kept without another CDN request. Bun's watch mode reloads the API after local source files change.
+The API reads player and tournament JSON under `apps/api/src/data/` by default, so database setup is unnecessary while the data model is being adjusted. Before the apps start, a preparation script downloads any missing runtime assets: the weapon, rule and stage catalogs go under `apps/api/src/data/`, while the stage-reveal vignette and default stage background video go under `apps/web/public/`. Existing files are kept without another CDN request. Bun's watch mode reloads the API after local source files change.
+
+After mounting, Overlay preloads the default background video without blocking its initial display and keeps it in memory for the page's lifetime. A missing stage video uses this cached video, or waits for the same download if it is still in progress. A failed preload is retried when the default video is needed.
+
+During a stage reveal, Overlay ignores duplicate playback requests and applies the latest matchup or display-setting changes after the reveal finishes. If an Overlay does not acknowledge a request, Dock ends the pending wait and reports the missing response. State inquiries continue automatically so playback controls recover when the source returns, without reloading Dock.
+
+An Overlay's active status expires after five seconds without a response, allowing recovery after a source crashes without sending an end notification. Dock keeps playback disabled until another Overlay responds as idle.
 
 Choose the development data source from the repository root with Bun:
 

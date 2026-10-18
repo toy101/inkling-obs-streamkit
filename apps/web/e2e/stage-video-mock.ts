@@ -3,7 +3,7 @@ import type { Page } from "@playwright/test";
 
 export type StageVideoMockWindow = typeof window & {
   stageVideoMock: {
-    requests: () => {
+    requests: (defaultVideo?: boolean) => {
       url: string;
       hasAbortSignal: boolean;
       aborted: boolean;
@@ -11,9 +11,9 @@ export type StageVideoMockWindow = typeof window & {
       bodyCompleted: boolean;
       bodyRead: boolean;
     }[];
-    respond: (index: number, status?: number) => void;
-    finishBody: (index: number) => void;
-    failNetwork: (index: number) => void;
+    respond: (index: number, status?: number, defaultVideo?: boolean) => void;
+    finishBody: (index: number, defaultVideo?: boolean) => void;
+    failNetwork: (index: number, defaultVideo?: boolean) => void;
     createdUrls: string[];
     revokedUrls: string[];
   };
@@ -37,8 +37,11 @@ export async function installStageVideoMock(page: Page): Promise<void> {
     const downloads: Download[] = [];
     const createdUrls: string[] = [];
     const revokedUrls: string[] = [];
-    const getDownload = (index: number): Download => {
-      const download = downloads[index];
+    const getDownloads = (defaultVideo: boolean) => downloads.filter((download) =>
+      (new URL(download.url, location.href).pathname === "/stage-background-default.webm") === defaultVideo,
+    );
+    const getDownload = (index: number, defaultVideo = false): Download => {
+      const download = getDownloads(defaultVideo)[index];
       if (!download) throw new Error(`Missing video download: ${index}`);
       return download;
     };
@@ -48,7 +51,11 @@ export async function installStageVideoMock(page: Page): Promise<void> {
       const url = typeof input === "string"
         ? input
         : input instanceof URL ? input.href : input.url;
-      if (!new URL(url, location.href).pathname.startsWith("/stage-video/")) {
+      const pathname = new URL(url, location.href).pathname;
+      if (
+        !pathname.startsWith("/stage-video/") &&
+        pathname !== "/stage-background-default.webm"
+      ) {
         return originalFetch(input, init);
       }
 
@@ -84,7 +91,7 @@ export async function installStageVideoMock(page: Page): Promise<void> {
     };
 
     (window as StageVideoMockWindow).stageVideoMock = {
-      requests: () => downloads.map((download) => ({
+      requests: (defaultVideo = false) => getDownloads(defaultVideo).map((download) => ({
         url: download.url,
         hasAbortSignal: download.signal !== null,
         aborted: download.signal?.aborted ?? false,
@@ -92,8 +99,8 @@ export async function installStageVideoMock(page: Page): Promise<void> {
         bodyCompleted: download.bodyCompleted,
         bodyRead: download.bodyRead,
       })),
-      respond: (index, status = 200) => {
-        const download = getDownload(index);
+      respond: (index, status = 200, defaultVideo = false) => {
+        const download = getDownload(index, defaultVideo);
         const body = new ReadableStream<Uint8Array>({
           start: (controller) => { download.controller = controller; },
         });
@@ -110,16 +117,16 @@ export async function installStageVideoMock(page: Page): Promise<void> {
         };
         download.resolve(response);
       },
-      finishBody: (index) => {
-        const download = getDownload(index);
+      finishBody: (index, defaultVideo = false) => {
+        const download = getDownload(index, defaultVideo);
         if (!download.controller) throw new Error("Video headers have not been sent.");
         // Deliver even an aborted body to exercise a late completion race.
         download.controller.enqueue(new Uint8Array(bytes));
         download.controller.close();
         download.bodyCompleted = true;
       },
-      failNetwork: (index) => {
-        getDownload(index).reject(new TypeError("Failed to fetch"));
+      failNetwork: (index, defaultVideo = false) => {
+        getDownload(index, defaultVideo).reject(new TypeError("Failed to fetch"));
       },
       createdUrls,
       revokedUrls,

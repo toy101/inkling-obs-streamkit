@@ -11,6 +11,9 @@ import {
   MATCH_LABEL_MAX_LENGTH,
   requestStageReveal,
   setOverlaySelection,
+  STAGE_REVEAL_ACK_TIMEOUT_MS,
+  subscribeStageRevealAcknowledgement,
+  subscribeStageRevealActivity,
 } from "../lib/overlay-state";
 import type { OverlaySelection } from "../lib/overlay-state";
 
@@ -86,6 +89,33 @@ function getAccentColorFromHue(hue: number): string {
 }
 
 export function Dock() {
+  const [stageRevealActive, setStageRevealActive] = useState<boolean | null>(null);
+  const [stageRevealError, setStageRevealError] = useState("");
+  const stageRevealPending = useRef<{ requestId: string; timeoutId: number } | null>(null);
+  const latestStageRevealActivity = useRef<boolean | null>(null);
+  useEffect(() => {
+    const unsubscribeActivity = subscribeStageRevealActivity((active) => {
+      latestStageRevealActivity.current = active;
+      if (active !== null) setStageRevealError("");
+      if (!stageRevealPending.current) setStageRevealActive(active);
+    });
+    const unsubscribeAcknowledgement = subscribeStageRevealAcknowledgement((acknowledgement) => {
+      const pending = stageRevealPending.current;
+      if (!pending || acknowledgement.requestId !== pending.requestId) return;
+      window.clearTimeout(pending.timeoutId);
+      stageRevealPending.current = null;
+      // Both acceptance and a busy rejection mean an Overlay is playing.
+      setStageRevealActive(true);
+      setStageRevealError("");
+    });
+    return () => {
+      unsubscribeActivity();
+      unsubscribeAcknowledgement();
+      if (stageRevealPending.current) window.clearTimeout(stageRevealPending.current.timeoutId);
+      stageRevealPending.current = null;
+    };
+  }, []);
+
   const restoredSelection = useRef(getOverlaySelection());
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [teams, setTeams] = useState<TournamentTeam[]>([]);
@@ -309,7 +339,9 @@ export function Dock() {
   const canSubmitMatchLabel = Boolean(
     submittedSelection && matchLabel !== submittedSelection.matchLabel,
   );
-  const canSubmitStageReveal = Boolean(submittedSelection && ruleId && stageId);
+  const canSubmitStageReveal = Boolean(
+    submittedSelection && ruleId && stageId && stageRevealActive === false,
+  );
   const canSubmitAccent = Boolean(
     submittedSelection &&
     isAccentColor(accentColor) &&
@@ -358,9 +390,13 @@ export function Dock() {
   const handleStageRevealSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!canSubmitStageReveal || !submittedSelection) {
+    if (!canSubmitStageReveal || !submittedSelection || stageRevealPending.current) {
       return;
     }
+
+    // Lock synchronously, including repeated form submissions in the same turn.
+    setStageRevealActive(true);
+    setStageRevealError("");
 
     const nextSelection = {
       ...submittedSelection,
@@ -369,7 +405,16 @@ export function Dock() {
     };
 
     commitSelection(nextSelection);
-    requestStageReveal({ ruleId, stageId });
+    const requestId = requestStageReveal({ ruleId, stageId });
+    const timeoutId = window.setTimeout(() => {
+      if (stageRevealPending.current?.requestId !== requestId) return;
+      stageRevealPending.current = null;
+      setStageRevealActive(latestStageRevealActivity.current);
+      if (latestStageRevealActivity.current !== true) {
+        setStageRevealError("Overlayから応答がありません。ブラウザソースを確認してください。");
+      }
+    }, STAGE_REVEAL_ACK_TIMEOUT_MS);
+    stageRevealPending.current = { requestId, timeoutId };
   };
 
   const handleAccentSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -545,6 +590,7 @@ export function Dock() {
         >
           確定・動画再生
         </button>
+        {stageRevealError && <p role="status">{stageRevealError}</p>}
       </form>
 
       <form className="dock-form" onSubmit={handleAccentSubmit}>
