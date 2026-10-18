@@ -490,6 +490,7 @@ function OverlayCarousel({
 }
 
 type LoadedMatchup = {
+  carouselSelectionKey: string;
   dataSelectionKey: string;
   matchup: OverlayMatchup | null;
 };
@@ -560,6 +561,11 @@ export function Overlay() {
   const accentColor = selection?.accentColor ?? DEFAULT_ACCENT_COLOR;
   const matchLabel = selection?.matchLabel ?? "";
   const showPositions = selection?.showPositions ?? true;
+  const carouselSelectionKey = [
+    tournamentId,
+    alphaTournamentTeamId,
+    bravoTournamentTeamId,
+  ].join(":");
   const dataSelectionKey = getMatchupDataSelectionKey({
     tournamentId,
     alphaTournamentTeamId,
@@ -824,7 +830,7 @@ export function Overlay() {
       });
 
       if (!cancelled) {
-        setLoaded({ dataSelectionKey, matchup: data });
+        setLoaded({ carouselSelectionKey, dataSelectionKey, matchup: data });
       }
     };
 
@@ -836,6 +842,7 @@ export function Overlay() {
   }, [
     alphaTournamentTeamId,
     bravoTournamentTeamId,
+    carouselSelectionKey,
     dataSelectionKey,
     loaded?.dataSelectionKey,
     ruleId,
@@ -844,7 +851,7 @@ export function Overlay() {
   ]);
 
   const matchup =
-    loaded?.dataSelectionKey === dataSelectionKey ? loaded.matchup : null;
+    loaded?.carouselSelectionKey === carouselSelectionKey ? loaded.matchup : null;
   const previewRule = stageRevealPlayback?.loop
     ? rules.find((rule) => rule.id === debugStageRevealSelection.ruleId)
     : null;
@@ -871,7 +878,7 @@ export function Overlay() {
 
       {matchup && (
         <OverlayCarousel
-          key={dataSelectionKey}
+          key={carouselSelectionKey}
           matchup={matchup}
           matchLabel={matchLabel}
           showPositions={showPositions}
