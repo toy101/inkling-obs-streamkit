@@ -5,9 +5,15 @@ import {
   DEBUG_OVERLAY_AUTOPLAY_MESSAGE,
   DEBUG_OVERLAY_SLIDES,
   DEBUG_OVERLAY_SLIDE_MESSAGE,
+  DEBUG_OVERLAY_STAGE_REVEAL_MESSAGE,
+  DEBUG_OVERLAY_STAGE_REVEAL_SELECTION_MESSAGE,
   isDebugOverlayReadyMessage,
 } from "../lib/debug-overlay-preview";
-import type { DebugOverlaySlideIndex } from "../lib/debug-overlay-preview";
+import type {
+  DebugOverlaySlideIndex,
+  DebugStageRevealSelection,
+} from "../lib/debug-overlay-preview";
+import { useMatchupCatalogs } from "../lib/use-matchup-catalogs";
 import { Dock } from "./Dock";
 
 const zoomOptions = [
@@ -20,11 +26,19 @@ const zoomOptions = [
 
 type ZoomMode = (typeof zoomOptions)[number]["value"];
 
+const initialStageRevealSelection: DebugStageRevealSelection = {
+  ruleId: "",
+  stageId: "",
+};
+
 export function Debug() {
+  const { rules, stages } = useMatchupCatalogs(true);
   const overlayFrameRef = useRef<HTMLIFrameElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const [isOverlayFrameLoaded, setIsOverlayFrameLoaded] = useState(false);
   const [isAutoplayEnabled, setIsAutoplayEnabled] = useState(true);
+  const [stageRevealSelection, setStageRevealSelection] =
+    useState<DebugStageRevealSelection>(initialStageRevealSelection);
   const [zoomMode, setZoomMode] = useState<ZoomMode>("fit");
   const [fitScale, setFitScale] = useState(0);
 
@@ -88,6 +102,26 @@ export function Debug() {
     return () => window.removeEventListener("message", receiveOverlayReady);
   }, [isAutoplayEnabled, setAutoplay]);
 
+  const sendStageRevealSelection = (selection: DebugStageRevealSelection) => {
+    overlayFrameRef.current?.contentWindow?.postMessage(
+      { type: DEBUG_OVERLAY_STAGE_REVEAL_SELECTION_MESSAGE, selection },
+      window.location.origin,
+    );
+  };
+
+  const updateStageRevealSelection = (selection: DebugStageRevealSelection) => {
+    setStageRevealSelection(selection);
+    sendStageRevealSelection(selection);
+  };
+
+  const showStageReveal = () => {
+    sendStageRevealSelection(stageRevealSelection);
+    overlayFrameRef.current?.contentWindow?.postMessage(
+      { type: DEBUG_OVERLAY_STAGE_REVEAL_MESSAGE },
+      window.location.origin,
+    );
+  };
+
   return (
     <div className="debug">
       <aside className="debug-dock" aria-label="表示コントローラー">
@@ -110,6 +144,13 @@ export function Debug() {
                   {label}
                 </button>
               ))}
+              <button
+                disabled={!isOverlayFrameLoaded}
+                onClick={showStageReveal}
+                type="button"
+              >
+                ステージ・ルール紹介
+              </button>
               <button
                 aria-pressed={isAutoplayEnabled}
                 className="debug-slide-autoplay"
@@ -147,10 +188,74 @@ export function Debug() {
           </div>
         </header>
 
+        <details className="debug-stage-reveal-text">
+          <summary>次ステージ・ルールの紹介テキストを上書き</summary>
+          <p id="stage-reveal-text-hint">
+            選んだルール・ステージの名称と説明を紹介プレビューに即時反映します。
+            動画の再生は続きます。
+          </p>
+          <fieldset
+            aria-describedby="stage-reveal-text-hint"
+            aria-label="紹介テキスト"
+            disabled={!isOverlayFrameLoaded}
+          >
+            <label>
+              プレビュールール
+              <select
+                disabled={rules.length === 0}
+                onChange={(event) =>
+                  updateStageRevealSelection({
+                    ...stageRevealSelection,
+                    ruleId: event.target.value,
+                  })
+                }
+                value={stageRevealSelection.ruleId}
+              >
+                <option value="">再生開始時のルール</option>
+                {rules.map((rule) => (
+                  <option key={rule.id} value={rule.id}>
+                    {rule.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              プレビューステージ
+              <select
+                disabled={stages.length === 0}
+                onChange={(event) =>
+                  updateStageRevealSelection({
+                    ...stageRevealSelection,
+                    stageId: event.target.value,
+                  })
+                }
+                value={stageRevealSelection.stageId}
+              >
+                <option value="">再生開始時のステージ</option>
+                {stages.map((stage) => (
+                  <option key={stage.id} value={stage.id}>
+                    {stage.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              onClick={() =>
+                updateStageRevealSelection(initialStageRevealSelection)
+              }
+              type="button"
+            >
+              元の表示に戻す
+            </button>
+          </fieldset>
+        </details>
+
         <dl className="debug-metrics">
           <div>
             <dt>描画サイズ</dt>
-            <dd>{OVERLAY_WIDTH} × {OVERLAY_HEIGHT} px</dd>
+            <dd>
+              {OVERLAY_WIDTH} × {OVERLAY_HEIGHT} px
+            </dd>
           </div>
           <div>
             <dt>比率</dt>
@@ -162,7 +267,9 @@ export function Debug() {
           </div>
           <div>
             <dt>表示サイズ</dt>
-            <dd>{Math.round(previewWidth)} × {Math.round(previewHeight)} px</dd>
+            <dd>
+              {Math.round(previewWidth)} × {Math.round(previewHeight)} px
+            </dd>
           </div>
         </dl>
 
@@ -178,6 +285,7 @@ export function Debug() {
                 onLoad={() => {
                   setIsOverlayFrameLoaded(true);
                   setAutoplay(isAutoplayEnabled);
+                  sendStageRevealSelection(stageRevealSelection);
                 }}
                 ref={overlayFrameRef}
                 title="1920 × 1080 Overlay プレビュー"
@@ -191,8 +299,12 @@ export function Debug() {
         </div>
 
         <footer className="debug-preview-footer">
-          <span>OBS ブラウザソース：幅 {OVERLAY_WIDTH} / 高さ {OVERLAY_HEIGHT}</span>
-          <a href="?view=overlay" target="_blank" rel="noreferrer">Overlay を開く ↗</a>
+          <span>
+            OBS ブラウザソース：幅 {OVERLAY_WIDTH} / 高さ {OVERLAY_HEIGHT}
+          </span>
+          <a href="?view=overlay" target="_blank" rel="noreferrer">
+            Overlay を開く ↗
+          </a>
         </footer>
       </section>
     </div>

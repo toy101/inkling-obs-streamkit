@@ -48,11 +48,11 @@ bun run dev:d1    # Web :5173 + API Worker :8787。ローカル D1 を参照
 
 1 つの Vite アプリを `view` クエリパラメータで切り替える。ルーターは使っていない。
 
-| ビュー | URL | 役割 |
-| --- | --- | --- |
-| Dock | `http://localhost:5173/?view=dock` | 操作パネル。オーバーレイの表示対象を選ぶ。 |
-| Overlay | `http://localhost:5173/?view=overlay` | 配信に映る 1920 × 1080 のページ。 |
-| Debug | `http://localhost:5173/?view=debug` | Dock と、実際の Overlay ページを縮小表示したプレビュー。 |
+| ビュー  | URL                                   | 役割                                                     |
+| ------- | ------------------------------------- | -------------------------------------------------------- |
+| Dock    | `http://localhost:5173/?view=dock`    | 操作パネル。オーバーレイの表示対象を選ぶ。               |
+| Overlay | `http://localhost:5173/?view=overlay` | 配信に映る 1920 × 1080 のページ。                        |
+| Debug   | `http://localhost:5173/?view=debug`   | Dock と、実際の Overlay ページを縮小表示したプレビュー。 |
 
 `view` を付けずに開いた場合は、指定できる値を表示するだけ。
 
@@ -97,10 +97,10 @@ bun run --filter admin test:e2e
 
 ## OBS の設定
 
-| 用途 | URL | サイズ |
-| --- | --- | --- |
-| カスタムブラウザドック | `http://localhost:5173/?view=dock` | 任意 |
-| ブラウザソース | `http://localhost:5173/?view=overlay` | 幅 1920 / 高さ 1080 |
+| 用途                   | URL                                   | サイズ              |
+| ---------------------- | ------------------------------------- | ------------------- |
+| カスタムブラウザドック | `http://localhost:5173/?view=dock`    | 任意                |
+| ブラウザソース         | `http://localhost:5173/?view=overlay` | 幅 1920 / 高さ 1080 |
 
 プレビューと OBS を見比べるときは Chrome のページズームを 100% にし、ブラウザソースへ追加の CSS を指定しない。別 OS のフォントや Chromium のバージョンによる描画差は、サイズを固定しただけでは保証できない。
 
@@ -109,7 +109,8 @@ bun run --filter admin test:e2e
 - Overlay の描画サイズは常に **1920 × 1080 px（16:9）**。
 - Debug は実際の `?view=overlay` を同じサイズの iframe に読み込み、外側の wrapper に `transform: scale()` を掛けるだけで縮小する。viewport、`rem`、メディアクエリの条件も本番ページと揃う。
 - 倍率は「全体に合わせる」または 25 / 50 / 75 / 100% を選択できる。自動倍率は最大 100%。手動倍率で収まらない場合はプレビュー内をスクロールする。
-- ツールバーから、対戦カード・各チーム詳細・次戦ルール／ステージを iframe プレビューへ即時表示できる。この操作は Debug 専用で、OBS の Browser Source 表示は変えない。
+- ツールバーから、対戦カード・各チーム詳細を iframe プレビューへ切り替えられる。「ステージ・ルール紹介」はトランジション後、反映済みのルール・ステージを表示したまま背景動画をループ再生する。別のシーンボタンを押すと確認を終了する。この操作は Debug 専用で、OBS の Browser Source 表示は変えない。
+- 「次ステージ・ルールの紹介テキストを上書き」を開くと、Dock と同じマスターからルール・ステージをそれぞれプルダウンで選べる。再生中でも選択した名称・説明だけ即時反映され、同じ動画が再生を続ける。「再生開始時のルール／ステージ」を選ぶか「元の表示に戻す」で上書きを解除する。上書きは Debug の紹介プレビューだけに適用され、保存されない。
 - ツールバーに描画サイズ・比率・現在の倍率・縮小後の表示サイズを表示する。
 - オーバーレイの背後の市松模様は透過確認用で、配信には含まれない。
 - Dock と iframe の選択同期には、OBS の Dock とブラウザソースの間と同じく、同一 origin の `BroadcastChannel` を使う。`localStorage` はページ読み込み時に最新の選択を復元するためだけに使う。
@@ -130,22 +131,22 @@ bun run --filter admin test:e2e
 
 ## コマンド
 
-| コマンド | 内容 |
-| --- | --- |
-| `bun dev` | web と API を並列起動する。 |
-| `bun run dev:apps` | web と API を並列起動する。 |
-| `bun run --filter web dev` | 片方のワークスペースだけ起動する（`api` も同様）。 |
-| `bun run --filter web lint` | Web の ESLint。Admin は `--filter admin lint`。 |
-| `bun run --filter web build` | `tsc -b && vite build`。唯一の型チェック経路。 |
-| `bun run dev:json` | JSON 参照の Bun API と Web を起動する。 |
-| `bun run dev:d1` | ローカル D1 を準備し、API Worker と Web を起動する。 |
-| `bun run db:setup:local` | ローカル D1 に未適用のマイグレーションと初回データを投入する。 |
-| `bun run openapi:build` | APIを起動せず、実行時データも読み込まずに、`dist/openapi/` 以下へ静的な Scalar ビューアーと `openapi.yaml` を生成する。 |
-| `bun run cf:login` / `bun run cf:whoami` | Wrangler でログインし、Cloudflare のアカウントを確認する。 |
-| `bun run db:check:production` | 本番 D1 の接続先・テーブル・マイグレーション履歴を読み取り専用で確認する。 |
-| `bun run db:migrate:production` / `bun run db:migrate` | 本番設定の D1 に Wrangler で未適用マイグレーションを実行する。 |
-| `D1_SEED_DEVELOPMENT_DATA=1 bun run db:setup` | マイグレーションを実行し、JSON の開発データを一度だけ投入する。 |
-| `bun run spellcheck` | リポジトリ全体を cspell で検査する。辞書は `cspell.json`。 |
+| コマンド                                               | 内容                                                                                                                    |
+| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `bun dev`                                              | web と API を並列起動する。                                                                                             |
+| `bun run dev:apps`                                     | web と API を並列起動する。                                                                                             |
+| `bun run --filter web dev`                             | 片方のワークスペースだけ起動する（`api` も同様）。                                                                      |
+| `bun run --filter web lint`                            | Web の ESLint。Admin は `--filter admin lint`。                                                                         |
+| `bun run --filter web build`                           | `tsc -b && vite build`。唯一の型チェック経路。                                                                          |
+| `bun run dev:json`                                     | JSON 参照の Bun API と Web を起動する。                                                                                 |
+| `bun run dev:d1`                                       | ローカル D1 を準備し、API Worker と Web を起動する。                                                                    |
+| `bun run db:setup:local`                               | ローカル D1 に未適用のマイグレーションと初回データを投入する。                                                          |
+| `bun run openapi:build`                                | APIを起動せず、実行時データも読み込まずに、`dist/openapi/` 以下へ静的な Scalar ビューアーと `openapi.yaml` を生成する。 |
+| `bun run cf:login` / `bun run cf:whoami`               | Wrangler でログインし、Cloudflare のアカウントを確認する。                                                              |
+| `bun run db:check:production`                          | 本番 D1 の接続先・テーブル・マイグレーション履歴を読み取り専用で確認する。                                              |
+| `bun run db:migrate:production` / `bun run db:migrate` | 本番設定の D1 に Wrangler で未適用マイグレーションを実行する。                                                          |
+| `D1_SEED_DEVELOPMENT_DATA=1 bun run db:setup`          | マイグレーションを実行し、JSON の開発データを一度だけ投入する。                                                         |
+| `bun run spellcheck`                                   | リポジトリ全体を cspell で検査する。辞書は `cspell.json`。                                                              |
 
 ## Web E2E・ビジュアル回帰テスト
 
@@ -192,7 +193,7 @@ D1 を使う場合、ローカルは `dev:d1` または `dev:admin:local`、本�
 
 SQL マイグレーションは `apps/api/src/db/migrations/` に置く。空の D1 を作成した後とスキーマ変更時に `bun run db:migrate` を実行する。現在の JSON 開発データを空の D1 に投入する場合は、代わりに `D1_SEED_DEVELOPMENT_DATA=1 bun run db:setup` を実行する。seed のバージョンを記録して2回目以降は DB を上書きしないため、初回投入後に JSON を編集しても D1 には反映されない。
 
-**`API_DATA_SOURCE` を切り替えるだけでは既存の Turso データは移らない。** 元の SQLite データベース全体を SQL にエクスポートし、D1 が要求する `BEGIN TRANSACTION` と `COMMIT` の行を除いてから、*空の新規 D1* へ `wrangler d1 execute <DATABASE_NAME> --remote --file=<DUMP.sql>` でインポートする。全体の dump なら `schema_migrations` と `seed_history` も含まれるため、移行先で先に `db:migrate` や `db:setup` を実行しない。切替前に各テーブルの件数を比較し、確認が済むまでは元の Turso データを残す。dump は Git 管理外に保管する。詳細は [Cloudflare のインポート手順](https://developers.cloudflare.com/d1/best-practices/import-export-data/) を参照。
+**`API_DATA_SOURCE` を切り替えるだけでは既存の Turso データは移らない。** 元の SQLite データベース全体を SQL にエクスポートし、D1 が要求する `BEGIN TRANSACTION` と `COMMIT` の行を除いてから、_空の新規 D1_ へ `wrangler d1 execute <DATABASE_NAME> --remote --file=<DUMP.sql>` でインポートする。全体の dump なら `schema_migrations` と `seed_history` も含まれるため、移行先で先に `db:migrate` や `db:setup` を実行しない。切替前に各テーブルの件数を比較し、確認が済むまでは元の Turso データを残す。dump は Git 管理外に保管する。詳細は [Cloudflare のインポート手順](https://developers.cloudflare.com/d1/best-practices/import-export-data/) を参照。
 
 旧 Bun API の `API_DATA_SOURCE=d1` アダプターも残っているが、これは D1 HTTP query API と `CLOUDFLARE_ACCOUNT_ID`、`D1_DATABASE_ID`、`CLOUDFLARE_API_TOKEN` を使う別経路。現在の本番 Admin 起動・マイグレーション・seed コマンドはこの経路を使わず、Wrangler に統一している。
 
