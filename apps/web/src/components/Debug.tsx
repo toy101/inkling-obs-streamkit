@@ -189,7 +189,7 @@ export function Debug() {
         </header>
 
         <details className="debug-stage-reveal-text">
-          <summary>紹介テキストを上書き</summary>
+          <summary>次ステージ・ルールの紹介テキストを上書き</summary>
           <p id="stage-reveal-text-hint">
             選んだルール・ステージの名称と説明を紹介プレビューに即時反映します。
             動画の再生は続きます。
@@ -203,15 +203,19 @@ export function Debug() {
               プレビュールール
               <select
                 disabled={rules.length === 0}
-                onChange={(event) => updateStageRevealSelection({
-                  ...stageRevealSelection,
-                  ruleId: event.target.value,
-                })}
+                onChange={(event) =>
+                  updateStageRevealSelection({
+                    ...stageRevealSelection,
+                    ruleId: event.target.value,
+                  })
+                }
                 value={stageRevealSelection.ruleId}
               >
                 <option value="">再生開始時のルール</option>
                 {rules.map((rule) => (
-                  <option key={rule.id} value={rule.id}>{rule.name}</option>
+                  <option key={rule.id} value={rule.id}>
+                    {rule.name}
+                  </option>
                 ))}
               </select>
             </label>
@@ -219,20 +223,26 @@ export function Debug() {
               プレビューステージ
               <select
                 disabled={stages.length === 0}
-                onChange={(event) => updateStageRevealSelection({
-                  ...stageRevealSelection,
-                  stageId: event.target.value,
-                })}
+                onChange={(event) =>
+                  updateStageRevealSelection({
+                    ...stageRevealSelection,
+                    stageId: event.target.value,
+                  })
+                }
                 value={stageRevealSelection.stageId}
               >
                 <option value="">再生開始時のステージ</option>
                 {stages.map((stage) => (
-                  <option key={stage.id} value={stage.id}>{stage.name}</option>
+                  <option key={stage.id} value={stage.id}>
+                    {stage.name}
+                  </option>
                 ))}
               </select>
             </label>
             <button
-              onClick={() => updateStageRevealSelection(initialStageRevealSelection)}
+              onClick={() =>
+                updateStageRevealSelection(initialStageRevealSelection)
+              }
               type="button"
             >
               元の表示に戻す
@@ -243,7 +253,9 @@ export function Debug() {
         <dl className="debug-metrics">
           <div>
             <dt>描画サイズ</dt>
-            <dd>{OVERLAY_WIDTH} × {OVERLAY_HEIGHT} px</dd>
+            <dd>
+              {OVERLAY_WIDTH} × {OVERLAY_HEIGHT} px
+            </dd>
           </div>
           <div>
             <dt>比率</dt>
@@ -255,7 +267,9 @@ export function Debug() {
           </div>
           <div>
             <dt>表示サイズ</dt>
-            <dd>{Math.round(previewWidth)} × {Math.round(previewHeight)} px</dd>
+            <dd>
+              {Math.round(previewWidth)} × {Math.round(previewHeight)} px
+            </dd>
           </div>
         </dl>
 
@@ -285,8 +299,12 @@ export function Debug() {
         </div>
 
         <footer className="debug-preview-footer">
-          <span>OBS ブラウザソース：幅 {OVERLAY_WIDTH} / 高さ {OVERLAY_HEIGHT}</span>
-          <a href="?view=overlay" target="_blank" rel="noreferrer">Overlay を開く ↗</a>
+          <span>
+            OBS ブラウザソース：幅 {OVERLAY_WIDTH} / 高さ {OVERLAY_HEIGHT}
+          </span>
+          <a href="?view=overlay" target="_blank" rel="noreferrer">
+            Overlay を開く ↗
+          </a>
         </footer>
       </section>
     </div>
