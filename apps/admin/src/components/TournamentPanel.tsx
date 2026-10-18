@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react'
 
+import { PLAYER_NAME_MAX_LENGTH } from '../../../api/src/models/player-name'
+import { TEAM_NAME_MAX_LENGTH } from '../../../api/src/models/team-name'
 import type {
   AdminApi,
   AdminTeam,
@@ -191,8 +193,16 @@ export function TournamentPanel({
       setTeamMessage({ kind: 'error', text: 'チーム名を入力してください。' })
       return
     }
+    if (input.name.length > TEAM_NAME_MAX_LENGTH) {
+      setTeamMessage({ kind: 'error', text: `チーム名は${TEAM_NAME_MAX_LENGTH}文字以内で入力してください。` })
+      return
+    }
     if (input.roster.some((entry) => !entry.registeredName)) {
       setTeamMessage({ kind: 'error', text: '追加した参加枠には登録名を入力してください。' })
+      return
+    }
+    if (input.roster.some((entry) => entry.registeredName.length > PLAYER_NAME_MAX_LENGTH)) {
+      setTeamMessage({ kind: 'error', text: `登録名は${PLAYER_NAME_MAX_LENGTH}文字以内で入力してください。` })
       return
     }
     const linkedPlayers = input.roster.flatMap((entry) => entry.playerId ? [entry.playerId] : [])
@@ -295,7 +305,7 @@ export function TournamentPanel({
                 <fieldset className="save-fields" disabled={saving || teamsLoading}>
                 <h3>{selectedTeam ? 'チームを編集' : 'チームを登録'}</h3>
                 <div className="form-grid team-basics">
-                  <label className="field"><span>チーム名 <b>必須</b></span><input value={teamForm.name} onChange={(event) => setTeamForm({ ...teamForm, name: event.target.value })} /></label>
+                  <label className="field"><span>チーム名 <b>必須</b></span><input value={teamForm.name} maxLength={TEAM_NAME_MAX_LENGTH} onChange={(event) => setTeamForm({ ...teamForm, name: event.target.value })} /></label>
                   <label className="field"><span>表示順</span><input type="number" min="1" value={teamForm.displayOrder} onChange={(event) => setTeamForm({ ...teamForm, displayOrder: Math.max(1, Number(event.target.value) || 1) })} /></label>
                   <label className="field team-status-field">
                     <span>チームの状態</span>
@@ -318,7 +328,7 @@ export function TournamentPanel({
                     {teamForm.roster.map((entry, index) => (
                       <div className="roster-row" key={entry.id ?? `new-${index}`}>
                         <span className="roster-order">{index + 1}</span>
-                        <label className="field"><span>登録名</span><input aria-label={`参加者 ${index + 1} 登録名`} value={entry.registeredName} onChange={(event) => updateRoster(index, { registeredName: event.target.value })} /></label>
+                        <label className="field"><span>登録名</span><input aria-label={`参加者 ${index + 1} 登録名`} value={entry.registeredName} maxLength={PLAYER_NAME_MAX_LENGTH} onChange={(event) => updateRoster(index, { registeredName: event.target.value })} /></label>
                         <label className="field"><span>既存参加者との紐付け</span><select aria-label={`参加者 ${index + 1} 紐付け`} value={entry.playerId ?? ''} onChange={(event) => updateRoster(index, { playerId: event.target.value || null })}><option value="">紐付けなし</option>{players.map((player) => <option key={player.id} value={player.id} disabled={player.id !== entry.playerId && teamForm.roster.some((item) => item.playerId === player.id)}>{player.displayName}</option>)}</select></label>
                         <button type="button" className="icon-button" aria-label={`参加者 ${index + 1} を削除`} onClick={() => setTeamForm((current) => updateAutomaticStatus(current, current.roster.filter((_, entryIndex) => entryIndex !== index)))}>×</button>
                       </div>
