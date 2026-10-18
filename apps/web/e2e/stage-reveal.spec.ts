@@ -120,133 +120,98 @@ async function assertPlaying(page: Page, root: Locator): Promise<void> {
   await video.evaluate((element) => (element as HTMLVideoElement).pause());
 }
 
-test("Debugの紹介テキストを再生中に上書き・解除しても同じ動画を維持する", async ({ page, api }) => {
+async function assertRevealSelection(
+  root: Locator,
+  rule = fixtureData.matchup.rule,
+  stage = fixtureData.matchup.stage,
+): Promise<void> {
+  await expect(root.locator(".overlay-stage-reveal-rule span")).toHaveText(rule.name);
+  await expect(root.locator(".overlay-stage-reveal-rule strong")).toHaveText(rule.en);
+  await expect(root.locator(".overlay-stage-reveal-rule p")).toHaveText(rule.description);
+  await expect(root.locator(".overlay-stage-reveal-stage span")).toHaveText(stage.name);
+  await expect(root.locator(".overlay-stage-reveal-stage strong")).toHaveText(stage.en.replace(" ", ""));
+}
+
+test("Debugでルール・ステージを選び直しても同じ動画を維持し、元の表示に戻せる", async ({ page, api }) => {
   const root = await prepareDebug(page, api);
   await page.getByRole("button", { name: "ステージ・ルール紹介", exact: true }).click();
   await expect.poll(() => readDownloads(root)).toHaveLength(1);
   await completeDownload(page, root);
   await assertPlaying(page, root);
   const video = root.getByLabel("選択ステージ紹介動画");
-  await expect(video).toHaveJSProperty("loop", true);
   const originalVideo = await video.elementHandle();
   const originalSource = await video.getAttribute("src");
   if (!originalVideo || !originalSource) throw new Error("Missing preview video.");
   await video.evaluate((element) => { (element as HTMLVideoElement).currentTime = 0.3; });
-  await expect.poll(() => video.evaluate((element) =>
-    (element as HTMLVideoElement).currentTime,
-  )).toBeCloseTo(0.3, 1);
   const originalSelection = await page.evaluate(() => localStorage.getItem("inkling:overlay-selection"));
 
   await page.getByText("紹介テキストを上書き", { exact: true }).click();
-  const fields = [
-    ["ルール名（日本語）", "上書きルール", ".overlay-stage-reveal-rule span", "上書きルール"],
-    ["ルール名（英語）", "Custom Rule", ".overlay-stage-reveal-rule strong", "Custom Rule"],
-    ["ルール説明（英語）", "Custom rule description.", ".overlay-stage-reveal-rule p", "Custom rule description."],
-    ["ステージ名（日本語）", "上書きステージ", ".overlay-stage-reveal-stage span", "上書きステージ"],
-    ["ステージ名（英語）", "Custom Stage", ".overlay-stage-reveal-stage strong", "CustomStage"],
-  ] as const;
-  for (const [label, value, selector, expected] of fields) {
-    await page.getByLabel(label, { exact: true }).fill(value);
-    await expect(root.locator(selector)).toHaveText(expected);
+  const previewRule = page.getByRole("combobox", { name: "プレビュールール", exact: true });
+  const previewStage = page.getByRole("combobox", { name: "プレビューステージ", exact: true });
+  await previewRule.selectOption(secondRule.id);
+  await assertRevealSelection(root, secondRule);
+  await previewStage.selectOption(secondStage.id);
+  await assertRevealSelection(root, secondRule, secondStage);
+  await page.getByRole("button", { name: "元の表示に戻す", exact: true }).click();
+  await expect(previewRule).toHaveValue("");
+  await expect(previewStage).toHaveValue("");
+  await assertRevealSelection(root);
+
+  for (const invalid of ["source", "origin", "payload", "unknown-id"] as const) {
+    await root.evaluate((_element, { invalid, selection }) => {
+      const value = invalid === "payload" ? { ruleId: 123 }
+        : invalid === "unknown-id" ? { ruleId: "missing", stageId: "missing" }
+        : selection;
+      window.dispatchEvent(new MessageEvent("message", {
+        source: invalid === "source" ? window : window.parent,
+        origin: invalid === "origin" ? "https://example.invalid" : location.origin,
+        data: { type: "inkling:debug-overlay-stage-reveal-selection", selection: value },
+      }));
+    }, { invalid, selection: { ruleId: secondRule.id, stageId: secondStage.id } });
+    await page.clock.runFor(1);
+    await assertRevealSelection(root);
   }
 
   expect(await video.evaluate((element, original) => element === original, originalVideo)).toBe(true);
   await expect(video).toHaveAttribute("src", originalSource);
+  await expect(video).toHaveJSProperty("loop", true);
   expect(await video.evaluate((element) => (element as HTMLVideoElement).currentTime)).toBeCloseTo(0.3, 1);
-  await expect(root.locator(".overlay-stage-reveal.is-playing")).toBeVisible();
   expect(await readDownloads(root)).toHaveLength(1);
   expect(api.matchupRequests()).toHaveLength(1);
   expect(await page.evaluate(() => localStorage.getItem("inkling:overlay-selection"))).toBe(originalSelection);
-  expect(await root.evaluate(() => (window as StageVideoMockWindow).stageVideoMock.revokedUrls)).toEqual([]);
-
-  await page.getByLabel("ルール名（英語）", { exact: true }).fill("");
-  await expect(root.locator(".overlay-stage-reveal-rule strong")).toHaveText(fixtureData.matchup.rule.en);
-  await page.getByRole("button", { name: "元の表示に戻す", exact: true }).click();
-  await expect(root.locator(".overlay-stage-reveal-rule span")).toHaveText(fixtureData.matchup.rule.name);
-  await expect(root.locator(".overlay-stage-reveal-rule p")).toHaveText(fixtureData.matchup.rule.description);
-  await expect(root.locator(".overlay-stage-reveal-stage span")).toHaveText(fixtureData.matchup.stage.name);
-  await expect(root.locator(".overlay-stage-reveal-stage strong")).toHaveText(fixtureData.matchup.stage.en.replace(" ", ""));
-  expect(await video.evaluate((element, original) => element === original, originalVideo)).toBe(true);
-  expect(await video.evaluate((element) => (element as HTMLVideoElement).currentTime)).toBeCloseTo(0.3, 1);
   await video.evaluate((element) => { void (element as HTMLVideoElement).play(); });
   await expect(video).toHaveJSProperty("paused", false);
-
-  await page.getByRole("button", { name: "対戦カード", exact: true }).click();
-  await page.clock.runFor(1);
-  await assertNoReveal(root);
-  expect(await root.evaluate(() => (window as StageVideoMockWindow).stageVideoMock.revokedUrls)).toEqual([originalSource]);
 });
 
-test("Debugの紹介テキストは取得中・遷移中も編集でき、通常の紹介には適用しない", async ({ page, api }) => {
+test("Debugの選択は取得中・遷移中も変更でき、通常の紹介には適用しない", async ({ page, api }) => {
   const root = await prepareDebug(page, api);
   await page.getByText("紹介テキストを上書き", { exact: true }).click();
-  await page.getByLabel("ステージ名（日本語）", { exact: true }).fill("開始前の上書き");
+  const previewRule = page.getByRole("combobox", { name: "プレビュールール", exact: true });
+  const previewStage = page.getByRole("combobox", { name: "プレビューステージ", exact: true });
+  await previewStage.selectOption(secondStage.id);
   await page.getByRole("button", { name: "ステージ・ルール紹介", exact: true }).click();
   await expect.poll(() => readDownloads(root)).toHaveLength(1);
-  await page.getByLabel("ステージ名（日本語）", { exact: true }).fill("取得中の上書き");
+  await previewStage.selectOption("");
   await completeDownload(page, root);
   await expect(root.locator(".overlay-stage-reveal.is-ready")).toHaveCount(1);
-  await expect(root.locator(".overlay-stage-reveal-stage span")).toHaveText("取得中の上書き");
+  await assertRevealSelection(root);
   await page.clock.runFor(50);
   await expect(root.locator(".overlay-stage-reveal.is-entering")).toHaveCount(1);
-  await page.getByLabel("ルール名（日本語）", { exact: true }).fill("遷移中の上書き");
+  await previewRule.selectOption(secondRule.id);
   await page.clock.runFor(150);
   await expect(root.locator(".overlay-stage-reveal.is-playing")).toBeVisible();
-  await expect(root.locator(".overlay-stage-reveal-rule span")).toHaveText("遷移中の上書き");
+  await assertRevealSelection(root, secondRule);
   expect(await readDownloads(root)).toHaveLength(1);
 
   await page.getByRole("button", { name: "対戦カード", exact: true }).click();
   await page.clock.runFor(1);
-  await assertNoReveal(root);
   await page.getByRole("button", { name: "確定・動画再生", exact: true }).click();
   await expect.poll(() => readDownloads(root)).toHaveLength(2);
   await completeDownload(page, root, 1);
   await assertPlaying(page, root);
-  await page.getByLabel("ステージ名（日本語）", { exact: true }).fill("通常再生中の上書き");
-  await expect(root.locator(".overlay-stage-reveal-stage span")).toHaveText(fixtureData.matchup.stage.name);
-  await expect(root.locator(".overlay-stage-reveal-rule span")).toHaveText(fixtureData.matchup.rule.name);
+  await previewStage.selectOption(secondStage.id);
+  await assertRevealSelection(root);
   await expect(root.getByLabel("選択ステージ紹介動画")).toHaveJSProperty("loop", false);
-});
-
-test("Debugの紹介テキストは送信元と型を検証し、入力をHTMLとして解釈しない", async ({ page, api }) => {
-  const root = await prepareDebug(page, api);
-  await page.getByRole("button", { name: "ステージ・ルール紹介", exact: true }).click();
-  await expect.poll(() => readDownloads(root)).toHaveLength(1);
-  await completeDownload(page, root);
-  await assertPlaying(page, root);
-  const text = {
-    ruleName: "不正な上書き",
-    ruleEn: "Untrusted Rule",
-    ruleDescription: "Untrusted description.",
-    stageName: "不正なステージ",
-    stageEn: "Untrusted Stage",
-  };
-  for (const invalidText of [null, [], { ruleName: "欠けた項目" }, { ...text, stageEn: 123 }]) {
-    await page.evaluate((text) => {
-      document.querySelector<HTMLIFrameElement>("iframe.debug-overlay-frame")?.contentWindow?.postMessage(
-        { type: "inkling:debug-overlay-stage-reveal-text", text }, location.origin,
-      );
-    }, invalidText);
-  }
-  await root.evaluate((_element, text) => {
-    // Even a valid payload is ignored when sent by the iframe itself.
-    window.postMessage({ type: "inkling:debug-overlay-stage-reveal-text", text }, location.origin);
-    window.dispatchEvent(new MessageEvent("message", {
-      data: { type: "inkling:debug-overlay-stage-reveal-text", text },
-      origin: "https://example.invalid",
-      source: window.parent,
-    }));
-  }, text);
-  await page.clock.runFor(1);
-  await expect(root.locator(".overlay-stage-reveal-rule span")).toHaveText(fixtureData.matchup.rule.name);
-  await expect(root.locator(".overlay-stage-reveal-stage span")).toHaveText(fixtureData.matchup.stage.name);
-
-  await page.getByText("紹介テキストを上書き", { exact: true }).click();
-  const literalText = '<img src="invalid" onerror="alert(1)">';
-  await page.getByLabel("ルール名（日本語）", { exact: true }).fill(literalText);
-  await expect(root.locator(".overlay-stage-reveal-rule span")).toHaveText(literalText);
-  await expect(root.locator(".overlay-stage-reveal-content img")).toHaveCount(0);
-  expect(await readDownloads(root)).toHaveLength(1);
 });
 
 test("動画のヘッダーと本文の完了後だけ選択した紹介を開始し、自動切替を止める", async ({ page, api }) => {

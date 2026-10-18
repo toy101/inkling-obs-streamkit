@@ -9,12 +9,13 @@ import {
   isDebugOverlayAutoplayMessage,
   isDebugOverlaySlideMessage,
   isDebugOverlayStageRevealMessage,
-  isDebugOverlayStageRevealTextMessage,
+  isDebugOverlayStageRevealSelectionMessage,
 } from "../lib/debug-overlay-preview";
 import type {
   DebugOverlaySlideIndex,
-  DebugStageRevealText,
+  DebugStageRevealSelection,
 } from "../lib/debug-overlay-preview";
+import { useMatchupCatalogs } from "../lib/use-matchup-catalogs";
 
 import { api } from "../lib/api";
 import type { OverlayMatchup } from "../lib/api";
@@ -508,37 +509,30 @@ type StageRevealPlayback = {
   phase: StageRevealPhase;
 };
 
-type StageRevealContentProps = Pick<StageRevealPlayback, "rule" | "stage"> & {
-  text: DebugStageRevealText | null;
-};
+type StageRevealContentProps = Pick<StageRevealPlayback, "rule" | "stage">;
 
-function StageRevealContent({ rule, stage, text }: StageRevealContentProps) {
-  const ruleName = text?.ruleName || rule.name;
-  const ruleEn = text?.ruleEn || rule.en;
-  const ruleDescription = text?.ruleDescription || rule.description;
-  const stageName = text?.stageName || stage.name;
-  const stageEn = text?.stageEn || stage.en;
-  const stageNameBreakIndex = stageEn.indexOf(" ");
+function StageRevealContent({ rule, stage }: StageRevealContentProps) {
+  const stageNameBreakIndex = stage.en.indexOf(" ");
 
   return (
     <div className="overlay-stage-reveal-content">
       <section className="overlay-stage-reveal-rule" aria-label="選択ルール">
-        <strong lang="en">{ruleEn}</strong>
-        <p lang="en">{ruleDescription}</p>
-        <span lang="ja">{ruleName}</span>
+        <strong lang="en">{rule.en}</strong>
+        <p lang="en">{rule.description}</p>
+        <span lang="ja">{rule.name}</span>
       </section>
 
       <section className="overlay-stage-reveal-stage" aria-label="選択ステージ">
-        <span lang="ja">{stageName}</span>
+        <span lang="ja">{stage.name}</span>
         <strong lang="en">
           {stageNameBreakIndex >= 0 ? (
             <>
-              {stageEn.slice(0, stageNameBreakIndex)}
+              {stage.en.slice(0, stageNameBreakIndex)}
               <br />
-              {stageEn.slice(stageNameBreakIndex + 1)}
+              {stage.en.slice(stageNameBreakIndex + 1)}
             </>
           ) : (
-            stageEn
+            stage.en
           )}
         </strong>
       </section>
@@ -547,14 +541,15 @@ function StageRevealContent({ rule, stage, text }: StageRevealContentProps) {
 }
 
 export function Overlay() {
+  const { rules, stages } = useMatchupCatalogs(window.parent !== window);
   const [selection, setSelection] = useState(getOverlaySelection);
   const [loaded, setLoaded] = useState<LoadedMatchup | null>(null);
   const [stageRevealRequest, setStageRevealRequest] =
     useState<OverlayStageRevealRequest | null>(null);
   const [stageRevealPlayback, setStageRevealPlayback] =
     useState<StageRevealPlayback | null>(null);
-  const [debugStageRevealText, setDebugStageRevealText] =
-    useState<DebugStageRevealText | null>(null);
+  const [debugStageRevealSelection, setDebugStageRevealSelection] =
+    useState<DebugStageRevealSelection>({ ruleId: "", stageId: "" });
   const stageRevealVideoRef = useRef<HTMLVideoElement>(null);
 
   const tournamentId = selection?.tournamentId ?? "";
@@ -615,8 +610,8 @@ export function Overlay() {
         return;
       }
 
-      if (isDebugOverlayStageRevealTextMessage(event.data)) {
-        setDebugStageRevealText(event.data.text);
+      if (isDebugOverlayStageRevealSelectionMessage(event.data)) {
+        setDebugStageRevealSelection(event.data.selection);
         return;
       }
 
@@ -850,6 +845,12 @@ export function Overlay() {
 
   const matchup =
     loaded?.dataSelectionKey === dataSelectionKey ? loaded.matchup : null;
+  const previewRule = stageRevealPlayback?.loop
+    ? rules.find((rule) => rule.id === debugStageRevealSelection.ruleId)
+    : null;
+  const previewStage = stageRevealPlayback?.loop
+    ? stages.find((stage) => stage.id === debugStageRevealSelection.stageId)
+    : null;
   const overlayStyle: OverlayStyle = {
     width: OVERLAY_WIDTH,
     height: OVERLAY_HEIGHT,
@@ -908,9 +909,8 @@ export function Overlay() {
           />
 
           <StageRevealContent
-            rule={stageRevealPlayback.rule}
-            stage={stageRevealPlayback.stage}
-            text={stageRevealPlayback.loop ? debugStageRevealText : null}
+            rule={previewRule ?? stageRevealPlayback.rule}
+            stage={previewStage ?? stageRevealPlayback.stage}
           />
 
           <div className="overlay-stage-transition" aria-hidden="true">

@@ -9,8 +9,8 @@ export const DEBUG_OVERLAY_AUTOPLAY_MESSAGE =
   "inkling:debug-overlay-autoplay";
 export const DEBUG_OVERLAY_STAGE_REVEAL_MESSAGE =
   "inkling:debug-overlay-stage-reveal";
-export const DEBUG_OVERLAY_STAGE_REVEAL_TEXT_MESSAGE =
-  "inkling:debug-overlay-stage-reveal-text";
+export const DEBUG_OVERLAY_STAGE_REVEAL_SELECTION_MESSAGE =
+  "inkling:debug-overlay-stage-reveal-selection";
 export const DEBUG_OVERLAY_READY_MESSAGE = "inkling:debug-overlay-ready";
 
 export type DebugOverlaySlideIndex =
@@ -30,17 +30,14 @@ export type DebugOverlayStageRevealMessage = {
   type: typeof DEBUG_OVERLAY_STAGE_REVEAL_MESSAGE;
 };
 
-export type DebugStageRevealText = {
-  ruleName: string;
-  ruleEn: string;
-  ruleDescription: string;
-  stageName: string;
-  stageEn: string;
+export type DebugStageRevealSelection = {
+  ruleId: string;
+  stageId: string;
 };
 
-export type DebugOverlayStageRevealTextMessage = {
-  type: typeof DEBUG_OVERLAY_STAGE_REVEAL_TEXT_MESSAGE;
-  text: DebugStageRevealText;
+export type DebugOverlayStageRevealSelectionMessage = {
+  type: typeof DEBUG_OVERLAY_STAGE_REVEAL_SELECTION_MESSAGE;
+  selection: DebugStageRevealSelection;
 };
 
 export type DebugOverlayReadyMessage = {
@@ -83,19 +80,16 @@ export function isDebugOverlayStageRevealMessage(
   return isRecord(value) && value.type === DEBUG_OVERLAY_STAGE_REVEAL_MESSAGE;
 }
 
-export function isDebugOverlayStageRevealTextMessage(
+export function isDebugOverlayStageRevealSelectionMessage(
   value: unknown,
-): value is DebugOverlayStageRevealTextMessage {
+): value is DebugOverlayStageRevealSelectionMessage {
   return (
     isRecord(value) &&
-    value.type === DEBUG_OVERLAY_STAGE_REVEAL_TEXT_MESSAGE &&
-    isRecord(value.text) &&
-    !Array.isArray(value.text) &&
-    typeof value.text.ruleName === "string" &&
-    typeof value.text.ruleEn === "string" &&
-    typeof value.text.ruleDescription === "string" &&
-    typeof value.text.stageName === "string" &&
-    typeof value.text.stageEn === "string"
+    value.type === DEBUG_OVERLAY_STAGE_REVEAL_SELECTION_MESSAGE &&
+    isRecord(value.selection) &&
+    !Array.isArray(value.selection) &&
+    typeof value.selection.ruleId === "string" &&
+    typeof value.selection.stageId === "string"
   );
 }
 

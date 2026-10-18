@@ -1748,7 +1748,7 @@ html[data-view="overlay"] body {
   font-size: 12px;
 }
 
-.debug-stage-reveal-text input {
+.debug-stage-reveal-text select {
   width: 100%;
   min-width: 0;
   padding: 6px 8px;

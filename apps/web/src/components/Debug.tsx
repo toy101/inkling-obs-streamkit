@@ -6,13 +6,14 @@ import {
   DEBUG_OVERLAY_SLIDES,
   DEBUG_OVERLAY_SLIDE_MESSAGE,
   DEBUG_OVERLAY_STAGE_REVEAL_MESSAGE,
-  DEBUG_OVERLAY_STAGE_REVEAL_TEXT_MESSAGE,
+  DEBUG_OVERLAY_STAGE_REVEAL_SELECTION_MESSAGE,
   isDebugOverlayReadyMessage,
 } from "../lib/debug-overlay-preview";
 import type {
   DebugOverlaySlideIndex,
-  DebugStageRevealText,
+  DebugStageRevealSelection,
 } from "../lib/debug-overlay-preview";
+import { useMatchupCatalogs } from "../lib/use-matchup-catalogs";
 import { Dock } from "./Dock";
 
 const zoomOptions = [
@@ -25,29 +26,19 @@ const zoomOptions = [
 
 type ZoomMode = (typeof zoomOptions)[number]["value"];
 
-const initialStageRevealText: DebugStageRevealText = {
-  ruleName: "",
-  ruleEn: "",
-  ruleDescription: "",
-  stageName: "",
-  stageEn: "",
+const initialStageRevealSelection: DebugStageRevealSelection = {
+  ruleId: "",
+  stageId: "",
 };
 
-const stageRevealTextFields = [
-  { key: "ruleName", label: "ルール名（日本語）" },
-  { key: "ruleEn", label: "ルール名（英語）" },
-  { key: "ruleDescription", label: "ルール説明（英語）" },
-  { key: "stageName", label: "ステージ名（日本語）" },
-  { key: "stageEn", label: "ステージ名（英語）" },
-] as const;
-
 export function Debug() {
+  const { rules, stages } = useMatchupCatalogs(true);
   const overlayFrameRef = useRef<HTMLIFrameElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const [isOverlayFrameLoaded, setIsOverlayFrameLoaded] = useState(false);
   const [isAutoplayEnabled, setIsAutoplayEnabled] = useState(true);
-  const [stageRevealText, setStageRevealText] =
-    useState<DebugStageRevealText>(initialStageRevealText);
+  const [stageRevealSelection, setStageRevealSelection] =
+    useState<DebugStageRevealSelection>(initialStageRevealSelection);
   const [zoomMode, setZoomMode] = useState<ZoomMode>("fit");
   const [fitScale, setFitScale] = useState(0);
 
@@ -111,20 +102,20 @@ export function Debug() {
     return () => window.removeEventListener("message", receiveOverlayReady);
   }, [isAutoplayEnabled, setAutoplay]);
 
-  const sendStageRevealText = (text: DebugStageRevealText) => {
+  const sendStageRevealSelection = (selection: DebugStageRevealSelection) => {
     overlayFrameRef.current?.contentWindow?.postMessage(
-      { type: DEBUG_OVERLAY_STAGE_REVEAL_TEXT_MESSAGE, text },
+      { type: DEBUG_OVERLAY_STAGE_REVEAL_SELECTION_MESSAGE, selection },
       window.location.origin,
     );
   };
 
-  const updateStageRevealText = (text: DebugStageRevealText) => {
-    setStageRevealText(text);
-    sendStageRevealText(text);
+  const updateStageRevealSelection = (selection: DebugStageRevealSelection) => {
+    setStageRevealSelection(selection);
+    sendStageRevealSelection(selection);
   };
 
   const showStageReveal = () => {
-    sendStageRevealText(stageRevealText);
+    sendStageRevealSelection(stageRevealSelection);
     overlayFrameRef.current?.contentWindow?.postMessage(
       { type: DEBUG_OVERLAY_STAGE_REVEAL_MESSAGE },
       window.location.origin,
@@ -200,30 +191,48 @@ export function Debug() {
         <details className="debug-stage-reveal-text">
           <summary>紹介テキストを上書き</summary>
           <p id="stage-reveal-text-hint">
-            紹介プレビューだけに即時反映します。動画の再生は続きます。
-            空欄は再生開始時の表示を使います。
+            選んだルール・ステージの名称と説明を紹介プレビューに即時反映します。
+            動画の再生は続きます。
           </p>
           <fieldset
             aria-describedby="stage-reveal-text-hint"
             aria-label="紹介テキスト"
             disabled={!isOverlayFrameLoaded}
           >
-            {stageRevealTextFields.map(({ key, label }) => (
-              <label key={key}>
-                {label}
-                <input
-                  onChange={(event) => updateStageRevealText({
-                    ...stageRevealText,
-                    [key]: event.target.value,
-                  })}
-                  placeholder="元の表示を使用"
-                  type="text"
-                  value={stageRevealText[key]}
-                />
-              </label>
-            ))}
+            <label>
+              プレビュールール
+              <select
+                disabled={rules.length === 0}
+                onChange={(event) => updateStageRevealSelection({
+                  ...stageRevealSelection,
+                  ruleId: event.target.value,
+                })}
+                value={stageRevealSelection.ruleId}
+              >
+                <option value="">再生開始時のルール</option>
+                {rules.map((rule) => (
+                  <option key={rule.id} value={rule.id}>{rule.name}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              プレビューステージ
+              <select
+                disabled={stages.length === 0}
+                onChange={(event) => updateStageRevealSelection({
+                  ...stageRevealSelection,
+                  stageId: event.target.value,
+                })}
+                value={stageRevealSelection.stageId}
+              >
+                <option value="">再生開始時のステージ</option>
+                {stages.map((stage) => (
+                  <option key={stage.id} value={stage.id}>{stage.name}</option>
+                ))}
+              </select>
+            </label>
             <button
-              onClick={() => updateStageRevealText(initialStageRevealText)}
+              onClick={() => updateStageRevealSelection(initialStageRevealSelection)}
               type="button"
             >
               元の表示に戻す
@@ -262,7 +271,7 @@ export function Debug() {
                 onLoad={() => {
                   setIsOverlayFrameLoaded(true);
                   setAutoplay(isAutoplayEnabled);
-                  sendStageRevealText(stageRevealText);
+                  sendStageRevealSelection(stageRevealSelection);
                 }}
                 ref={overlayFrameRef}
                 title="1920 × 1080 Overlay プレビュー"
