@@ -87,8 +87,14 @@ function getAccentColorFromHue(hue: number): string {
 }
 
 export function Dock() {
-  const [stageRevealActive, setStageRevealActive] = useState(false);
-  useEffect(() => subscribeStageRevealActivity(setStageRevealActive), []);
+  const [stageRevealActive, setStageRevealActive] = useState<boolean | null>(null);
+  const stageRevealPending = useRef(false);
+  useEffect(() => subscribeStageRevealActivity((active) => {
+    // Ignore an idle snapshot sent before the Overlay receives this request.
+    if (stageRevealPending.current && !active) return;
+    stageRevealPending.current = false;
+    setStageRevealActive(active);
+  }), []);
 
   const restoredSelection = useRef(getOverlaySelection());
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
@@ -314,7 +320,7 @@ export function Dock() {
     submittedSelection && matchLabel !== submittedSelection.matchLabel,
   );
   const canSubmitStageReveal = Boolean(
-    submittedSelection && ruleId && stageId && !stageRevealActive,
+    submittedSelection && ruleId && stageId && stageRevealActive === false,
   );
   const canSubmitAccent = Boolean(
     submittedSelection &&
@@ -364,9 +370,13 @@ export function Dock() {
   const handleStageRevealSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!canSubmitStageReveal || !submittedSelection) {
+    if (!canSubmitStageReveal || !submittedSelection || stageRevealPending.current) {
       return;
     }
+
+    // Lock synchronously, including repeated form submissions in the same turn.
+    stageRevealPending.current = true;
+    setStageRevealActive(true);
 
     const nextSelection = {
       ...submittedSelection,

@@ -40,26 +40,52 @@ const STAGE_REVEAL_VIDEO_BASE_URL =
 const STAGE_REVEAL_DEFAULT_VIDEO_URL = "/stage-background-default.webm";
 const STAGE_REVEAL_VIGNETTE_URL = "/stage-reveal-vignette.png";
 
-// Keep the Blob for this page's lifetime; each playback owns its object URL.
-let defaultStageVideoRequest: Promise<Blob> | null = null;
+type DefaultStageVideoRequest = {
+  promise: Promise<Blob>;
+  source: "preload" | "playback";
+};
 
-function loadDefaultStageVideo(): Promise<Blob> {
+// Keep the Blob for this page's lifetime; each playback owns its object URL.
+let defaultStageVideoRequest: DefaultStageVideoRequest | null = null;
+
+function loadDefaultStageVideo(
+  source: DefaultStageVideoRequest["source"],
+): DefaultStageVideoRequest {
   if (!defaultStageVideoRequest) {
-    const request = fetch(STAGE_REVEAL_DEFAULT_VIDEO_URL).then(async (response) => {
-      if (!response.ok) {
-        throw new Error(
-          `既定ステージ動画のダウンロードに失敗しました: ${response.status}`,
-        );
-      }
-      return response.blob();
-    });
+    const request: DefaultStageVideoRequest = {
+      promise: fetch(STAGE_REVEAL_DEFAULT_VIDEO_URL).then(async (response) => {
+        if (!response.ok) {
+          throw new Error(
+            `既定ステージ動画のダウンロードに失敗しました: ${response.status}`,
+          );
+        }
+        return response.blob();
+      }),
+      source,
+    };
     defaultStageVideoRequest = request;
-    // A failed preload can be retried when the fallback is actually needed.
-    void request.catch(() => {
+    void request.promise.catch(() => {
       if (defaultStageVideoRequest === request) defaultStageVideoRequest = null;
     });
   }
   return defaultStageVideoRequest;
+}
+
+async function loadDefaultStageVideoForPlayback(
+  signal: AbortSignal,
+): Promise<Blob> {
+  const request = loadDefaultStageVideo("playback");
+  try {
+    return await request.promise;
+  } catch (error) {
+    if (signal.aborted || request.source !== "preload") {
+      throw error;
+    }
+
+    // Retry once only when this playback shared the in-flight preload.
+    if (defaultStageVideoRequest === request) defaultStageVideoRequest = null;
+    return loadDefaultStageVideo("playback").promise;
+  }
 }
 
 type OverlayTeam = OverlayMatchup["alpha"];
@@ -601,7 +627,7 @@ export function Overlay() {
 
   useEffect(() => {
     // Preloading must not block the overlay or report a playback failure.
-    void loadDefaultStageVideo().catch(() => {});
+    void loadDefaultStageVideo("preload").promise.catch(() => {});
   }, []);
 
   const tournamentId = selection?.tournamentId ?? "";
@@ -725,7 +751,7 @@ export function Overlay() {
         }
 
         const videoBlob = response.status === 404
-          ? await loadDefaultStageVideo()
+          ? await loadDefaultStageVideoForPlayback(controller.signal)
           : await response.blob();
         if (controller.signal.aborted) {
           return;

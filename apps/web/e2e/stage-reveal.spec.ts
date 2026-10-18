@@ -664,7 +664,7 @@ test("未配置のステージは既定動画の本文完了を待って紹介�
   expect(await readDefaultDownloads(root)).toHaveLength(1);
 });
 
-test("既定動画も未配置なら紹介を開始せず、再帰的に取得しない", async ({
+test("先読み待機中に既定動画も未配置なら一度だけ再取得して紹介を終了する", async ({
   page,
   api,
 }) => {
@@ -679,12 +679,26 @@ test("既定動画も未配置なら紹介を開始せず、再帰的に取得�
   await root.evaluate(() =>
     (window as StageVideoMockWindow).stageVideoMock.respond(0, 404, true),
   );
+  await expect.poll(() => readDefaultDownloads(root)).toHaveLength(2);
+  await root.evaluate(() =>
+    (window as StageVideoMockWindow).stageVideoMock.respond(1, 404, true),
+  );
   await expect.poll(async () => (await readDownloads(root))[0]?.aborted).toBe(true);
   await page.clock.fastForward(1_000);
   await assertNoReveal(root);
   await assertMatchup(root);
   expect(await readDownloads(root)).toHaveLength(1);
-  expect(await readDefaultDownloads(root)).toHaveLength(1);
+  expect(await readDefaultDownloads(root)).toHaveLength(2);
+
+  const submit = page.getByRole("button", {
+    name: "確定・動画再生",
+    exact: true,
+  });
+  await expect(submit).toBeEnabled();
+  await submit.click();
+  await expect.poll(() => readDownloads(root)).toHaveLength(2);
+  await completeDownload(page, root, 1);
+  await assertPlaying(page, root);
 });
 
 test("先読み完了後は既定動画を再取得せず繰り返し再生する", async ({ page, api }) => {
@@ -715,7 +729,35 @@ test("先読み完了後は既定動画を再取得せず繰り返し再生す�
   )).toBe(2);
 });
 
-test("先読み失敗は画面を止めず、404時に既定動画の取得を再試行する", async ({ page, api }) => {
+test("先読み待機中の失敗後は既定動画を一度だけ再取得して再生する", async ({
+  page,
+  api,
+}) => {
+  const root = await prepareDebug(page, api);
+  await expect.poll(() => readDefaultDownloads(root)).toHaveLength(1);
+  await page.getByRole("button", { name: "確定・動画再生", exact: true }).click();
+  await expect.poll(() => readDownloads(root)).toHaveLength(1);
+  await root.evaluate(() =>
+    (window as StageVideoMockWindow).stageVideoMock.respond(0, 404),
+  );
+  await root.evaluate(() =>
+    (window as StageVideoMockWindow).stageVideoMock.failNetwork(0, true),
+  );
+  await expect.poll(() => readDefaultDownloads(root)).toHaveLength(2);
+  await root.evaluate(() => {
+    const mock = (window as StageVideoMockWindow).stageVideoMock;
+    mock.respond(1, 200, true);
+    mock.finishBody(1, true);
+  });
+  await assertPlaying(page, root);
+  expect(await readDefaultDownloads(root)).toHaveLength(2);
+});
+
+test("先読み失敗後のオンデマンド取得が失敗しても再取得を繰り返さない", async ({
+  page,
+  api,
+}) => {
+  api.allowConsoleError("Failed to fetch");
   const root = await prepareDebug(page, api);
   await expect.poll(() => readDefaultDownloads(root)).toHaveLength(1);
   await root.evaluate(() =>
@@ -729,12 +771,16 @@ test("先読み失敗は画面を止めず、404時に既定動画の取得を�
     (window as StageVideoMockWindow).stageVideoMock.respond(0, 404),
   );
   await expect.poll(() => readDefaultDownloads(root)).toHaveLength(2);
-  await root.evaluate(() => {
-    const mock = (window as StageVideoMockWindow).stageVideoMock;
-    mock.respond(1, 200, true);
-    mock.finishBody(1, true);
-  });
-  await assertPlaying(page, root);
+  await root.evaluate(() =>
+    (window as StageVideoMockWindow).stageVideoMock.failNetwork(1, true),
+  );
+  await page.clock.runFor(1);
+  await assertNoReveal(root);
+  await assertMatchup(root);
+  expect(await readDefaultDownloads(root)).toHaveLength(2);
+  await expect(
+    page.getByRole("button", { name: "確定・動画再生", exact: true }),
+  ).toBeEnabled();
 });
 
 test("既定動画待機中に紹介を切り替えても先読みを維持し、古い紹介を再生しない", async ({ page, api }) => {
@@ -757,16 +803,14 @@ test("既定動画待機中に紹介を切り替えても先読みを維持し�
   await completeDownload(page, root, 1);
   await assertPlaying(page, root);
   const source = await root.getByLabel("選択ステージ紹介動画").getAttribute("src");
-  await root.evaluate(() => {
-    const mock = (window as StageVideoMockWindow).stageVideoMock;
-    mock.respond(0, 200, true);
-    mock.finishBody(0, true);
-  });
-  await expect.poll(async () => (await readDefaultDownloads(root))[0]?.bodyRead).toBe(true);
+  await root.evaluate(() =>
+    (window as StageVideoMockWindow).stageVideoMock.failNetwork(0, true),
+  );
   await page.clock.runFor(1);
   await assertRevealSelection(root, fixtureData.matchup.rule, secondStage);
   await expect(root.getByLabel("選択ステージ紹介動画")).toHaveAttribute("src", source ?? "");
   expect((await readDefaultDownloads(root))[0]?.aborted).toBe(false);
+  expect(await readDefaultDownloads(root)).toHaveLength(1);
   expect(await root.evaluate(() =>
     (window as StageVideoMockWindow).stageVideoMock.createdUrls.length,
   )).toBe(1);
