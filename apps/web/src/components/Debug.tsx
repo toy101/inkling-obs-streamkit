@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { OVERLAY_HEIGHT, OVERLAY_WIDTH } from "../lib/overlay-canvas";
 import {
   DEBUG_OVERLAY_AUTOPLAY_MESSAGE,
   DEBUG_OVERLAY_SLIDES,
   DEBUG_OVERLAY_SLIDE_MESSAGE,
+  isDebugOverlayReadyMessage,
 } from "../lib/debug-overlay-preview";
 import type { DebugOverlaySlideIndex } from "../lib/debug-overlay-preview";
 import { Dock } from "./Dock";
@@ -62,12 +63,30 @@ export function Debug() {
     );
   };
 
-  const setAutoplay = (autoplay: boolean) => {
+  const setAutoplay = useCallback((autoplay: boolean) => {
     overlayFrameRef.current?.contentWindow?.postMessage(
       { type: DEBUG_OVERLAY_AUTOPLAY_MESSAGE, autoplay },
       window.location.origin,
     );
-  };
+  }, []);
+
+  useEffect(() => {
+    const receiveOverlayReady = (event: MessageEvent<unknown>) => {
+      if (
+        event.source !== overlayFrameRef.current?.contentWindow ||
+        event.origin !== window.location.origin ||
+        !isDebugOverlayReadyMessage(event.data)
+      ) {
+        return;
+      }
+
+      // The carousel mounts after its API response and can remount on selection changes.
+      setAutoplay(isAutoplayEnabled);
+    };
+
+    window.addEventListener("message", receiveOverlayReady);
+    return () => window.removeEventListener("message", receiveOverlayReady);
+  }, [isAutoplayEnabled, setAutoplay]);
 
   return (
     <div className="debug">
