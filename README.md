@@ -16,9 +16,9 @@ The Dock's **Position display** button immediately shows or hides player positio
 
 ## Requirements
 
-- [Bun](https://bun.sh) — developed on 1.4.2. Bun 1.3.1 failed to resolve a peer dependency while installing Elysia, so run `bun upgrade` if installation breaks.
+- [Bun](https://bun.sh): developed on 1.4.2. Bun 1.3.1 failed to resolve a peer dependency while installing Elysia, so run `bun upgrade` if installation breaks.
 - A Cloudflare account and a D1 database are needed only when using `API_DATA_SOURCE=d1`. JSON remains the default.
-- OBS Studio — only needed to actually put the overlay on air. Day-to-day development happens in the Debug view.
+- OBS Studio is only needed to actually put the overlay on air. Day-to-day development happens in the Debug view.
 
 ## Getting started
 
@@ -31,7 +31,13 @@ bun dev
 
 Run these commands at the repository root. The two `.env.local` files are ignored by Git. D1 credentials stay in the API process and outside Vite; `VITE_API_URL` is intentionally public because the browser needs it.
 
-The API reads player and tournament JSON under `apps/api/src/data/` by default, so database setup is unnecessary while the data model is being adjusted. Before the apps start, a preparation script downloads any missing runtime assets: the weapon, rule and stage catalogs go under `apps/api/src/data/`, while the stage-reveal vignette goes under `apps/web/public/`. Existing files are kept without another CDN request. Bun's watch mode reloads the API after local source files change.
+The API reads player and tournament JSON under `apps/api/src/data/` by default, so database setup is unnecessary while the data model is being adjusted. Before the apps start, a preparation script downloads any missing runtime assets: the weapon, rule and stage catalogs go under `apps/api/src/data/`, while the stage-reveal vignette and default stage background video go under `apps/web/public/`. Existing files are kept without another CDN request. Bun's watch mode reloads the API after local source files change.
+
+After mounting, Overlay preloads the default background video without blocking its initial display and keeps it in memory for the page's lifetime. A missing stage video uses this cached video, or waits for the same download if it is still in progress. A failed preload is retried when the default video is needed.
+
+During a stage reveal, Overlay ignores duplicate playback requests and applies the latest matchup or display-setting changes after the reveal finishes. If an Overlay does not acknowledge a request, Dock ends the pending wait and reports the missing response. State inquiries continue automatically so playback controls recover when the source returns, without reloading Dock.
+
+An Overlay's active status expires after five seconds without a response, allowing recovery after a source crashes without sending an end notification. Dock keeps playback disabled until another Overlay responds as idle.
 
 Choose the development data source from the repository root with Bun:
 
@@ -58,7 +64,9 @@ Opening the site without `view` just prints the accepted values.
 
 ## Admin app
 
-`apps/admin` is a local management app for creating and updating tournaments, tournament teams, and participants. Edit tournament names and statuses, team order, up to four roster names and linked participants, and participant icons, positions, and up to four weapons. Roster entries can have a registered name without a linked participant. Team status is automatically draft with fewer than four members and confirmed with four. Select hidden to retain the roster and participant data while excluding the team from Dock and Overlay. Restoring a hidden team recalculates its status from the roster size. Admin can edit every status; Dock and Overlay only display confirmed teams.
+`apps/admin` is a local management app for creating and updating tournaments, tournament teams, and participants. Edit tournament names and statuses, team order, up to four roster names and linked participants, and participant icons, positions, and up to four weapons. Roster entries can have a registered name without a linked participant.
+
+Team status is automatically draft with fewer than four members and confirmed with four. Select hidden to retain the roster and participant data while excluding the team from Dock and Overlay. Restoring a hidden team recalculates its status from the roster size. Admin can edit every status; Dock and Overlay only display confirmed teams.
 
 1. Run `cp apps/admin/.env.example apps/admin/.env.local`.
 2. Set a sufficiently long random `ADMIN_API_TOKEN` in `apps/api/.env.local` (for example, generate one with `bun -e 'console.log(crypto.randomUUID())'`).
@@ -67,25 +75,26 @@ Opening the site without `view` just prints the accepted values.
 
 ```bash
 bun run dev:admin:local       # Local D1: API :8787 / Web :5173 / Admin :5174
-bun run dev:admin:production  # Production D1: local API Worker :3000 / Web :5173 / Admin :5174
+bun run dev:admin:production  # Production D1: deployed API Worker / local Admin :5174 only
 ```
 
-Apply the additional migrations to an existing D1 database before using team statuses. Local `dev:admin:local` applies them automatically at startup. For production, stop the API, run `bun run db:migrate:production`, then restart it. Migration 009 adds the status column and 010 derives existing statuses from roster counts. Tournaments, teams, participants, and rosters are preserved. The legacy `roster_locked_at` column remains for compatibility and is no longer used by the app. Legacy JSON data is also normalized using roster counts.
+Apply the additional migrations to an existing D1 database before using team statuses. Local `dev:admin:local` applies them automatically at startup. For production, apply pending migrations separately with `bun run db:migrate:production` before using the new functionality. Migration 009 adds the status column and 010 derives existing statuses from roster counts. Tournaments, teams, participants, and rosters are preserved. The legacy `roster_locked_at` column remains for compatibility and is no longer used by the app. Legacy JSON data is also normalized using roster counts.
 
-Production uses Wrangler OAuth and a D1 binding: Admin → local API Worker → production D1. This permits writes without deploying the API code to Cloudflare or manually creating a Cloudflare API token. Run these commands from the repository root.
+Production connects directly: Admin → deployed API Worker → production D1. Only Admin runs locally; the deployed Web and API keep serving the production environment. Run these commands from the repository root unless noted otherwise.
 
-1. If legacy HTTP authentication or account settings exist, remove or comment out `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, API key/email, and their `CF_` aliases in `apps/api/.env.local`, and `unset` them in the shell before signing in. Run `bun install`, then `bun run cf:login` to sign in through the browser and `bun run cf:whoami` to confirm the account.
-2. On first setup, run `cp apps/api/wrangler.production.example.toml apps/api/wrangler.production.toml`. Replace `account_id` and the `database_name` and `database_id` under `env.production.d1_databases` with the production values. Keep `remote = true`. Leave the local-only `wrangler.local.toml` unchanged.
-3. Set `CATALOG_URL`, `IKACLO_API_ORIGIN`, and `ADMIN_API_TOKEN` in `apps/api/.env.local`. Reuse the catalog URL and image origin already configured for the app. The admin token is separate from Cloudflare authentication and is used to connect Admin. Remove legacy HTTP credentials such as `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, and their `CF_` aliases from `.env.local` and the shell environment. Production commands stop before connecting when these OAuth overrides remain configured.
-4. Run `bun run db:check:production` to inspect the database and migration history, then `bun run db:migrate:production` to apply pending migrations. The latter changes the production database.
-5. Run `bun run dev:admin:production`. It generates `apps/api/.dev.vars.production` and starts the local API Worker through Wrangler. Startup does not apply migrations or import development data.
-6. Open `http://127.0.0.1:5174`, confirm that production D1 is displayed, and connect with `ADMIN_API_TOKEN`. Register participants, a tournament, and its teams. A roster with four members becomes confirmed. Inspect the saved rows in the Cloudflare D1 Console as well.
+1. Set `VITE_PRODUCTION_API_URL` in `apps/admin/.env.local` to the deployed API Worker HTTPS URL. Use the API URL, not the Web URL. Production has no localhost fallback.
+2. The deployed API must bind the production D1 as `DB`. Set `ADMIN_ENVIRONMENT = "production"` and `ADMIN_ALLOWED_ORIGINS = "http://localhost:5174,http://127.0.0.1:5174"` in `apps/api/wrangler.toml` under `[vars]`, as shown in the example. These are also the Worker's defaults. `CORS_ALLOWED_ORIGINS` remains the deployed Web origin; the API adds the Admin origins to its CORS allowlist.
+3. Enable management routes by adding `ADMIN_API_TOKEN` to the **deployed API Worker** as a [Cloudflare Secret](https://developers.cloudflare.com/workers/configuration/secrets/). From `apps/api/`, run `bun run wrangler secret put ADMIN_API_TOKEN --config wrangler.toml` and enter a long random token. This command deploys a new Worker version immediately. A token in local `.env.local` or `.dev.vars.production` alone does not configure the deployed Worker. Deploy with `bun run wrangler deploy --config wrangler.toml` as well if you changed the Worker code or variable values.
+4. Run `bun run dev:admin:production`. This starts only Admin on `http://127.0.0.1:5174`; it does not start Web/API, log in to Cloudflare, migrate D1, or seed data.
+5. Confirm the displayed API URL and production D1 environment, then enter the same `ADMIN_API_TOKEN` to connect. An unconfigured token returns 404, an invalid token returns 401, and an origin outside the Admin allowlist returns 403.
+
+Wrangler OAuth is needed for deployment, Secret registration, and database maintenance, not for normal Admin startup. Existing `db:check:production`, `db:migrate:production`, and seed commands still use the ignored `apps/api/wrangler.production.toml`: copy `wrangler.production.example.toml`, configure the same production account and D1 under `env.production`, and retain `remote = true`. Run `bun run cf:login` / `bun run cf:whoami` before maintenance. Remove legacy `CLOUDFLARE_*` / `CF_*` HTTP authentication overrides if those commands reject them.
 
 `db:migrate:production` records migration history in Wrangler's standard `d1_migrations` table. When legacy `schema_migrations` exists, it validates known applied filenames and transfers only the history metadata. Existing application tables without history or unknown migrations stop automatic application. The actual configuration and generated secrets remain outside Git.
 
 The connection target is fixed by `VITE_ADMIN_TARGET` at startup. `dev:admin:local` selects local D1 and `dev:admin:production` selects production D1; the UI displays the current environment and API URL. Configure the endpoints with `VITE_LOCAL_API_URL` and `VITE_PRODUCTION_API_URL`. Restart with the corresponding command to change environments. The UI compares the startup target with `/admin/status` and allows saves only after the environment matches. Disconnecting clears credentials, loaded data, and edits.
 
-The admin token stays in browser memory; Cloudflare credentials stay in the API process. Never put tokens in `VITE_` variables. The API checks Bearer authentication and `ADMIN_ALLOWED_ORIGINS`, and rejects management operations when no token is configured or JSON mode is active. A public API Worker also rejects management operations unless explicitly configured with an admin token.
+The admin token stays in browser memory and is configured on the API Worker as a Secret; Cloudflare credentials are used only by deployment and maintenance tools. Never put tokens in `VITE_` variables. The API checks Bearer authentication and `ADMIN_ALLOWED_ORIGINS`, and rejects management operations when no token is configured or JSON mode is active. A public API Worker also rejects management operations unless explicitly configured with an admin token.
 
 Saved data goes into the same D1 tables used by the existing Web API and Overlay. Reload an already open Dock / Overlay page to fetch updated data. Existing `bun dev`, `dev:json`, and `dev:d1` commands still start only Web and API.
 
@@ -102,9 +111,9 @@ bun run --filter admin test:e2e
 | Custom Browser Dock | `http://localhost:5173/?view=dock`    | any                      |
 | Browser Source      | `http://localhost:5173/?view=overlay` | width 1920 / height 1080 |
 
-Keep Chrome's page zoom at 100% when comparing the preview against OBS, and do not add custom CSS to the browser source. A fixed canvas size alone does not guarantee identical rendering across operating systems or Chromium versions — fonts in particular.
+Keep Chrome's page zoom at 100% when comparing the preview against OBS, and do not add custom CSS to the browser source. A fixed canvas size alone does not guarantee identical rendering across operating systems or Chromium versions, especially because of font differences.
 
-## Overlay preview (Debug view)
+## Overlay preview in Debug view
 
 - The overlay always renders at **1920 × 1080 px (16:9)**.
 - Debug loads the real `?view=overlay` page in an iframe of exactly that size and shrinks it only with `transform: scale()` on the wrapper. Viewport, `rem` and media query conditions therefore match the production page.
@@ -162,7 +171,7 @@ When an intentional design change is made, review the rendered result locally an
 bun run --filter web test:e2e -- --update-snapshots
 ```
 
-Inspect the changed PNG files under `apps/web/e2e/visual-regression.spec.ts-snapshots/` before committing them. Baselines are intentionally managed for the `chromium-linux` project (`*-chromium-linux.png`), matching the Ubuntu Chromium environment in GitHub Actions. Baseline generation on macOS or Windows is not canonical; use the same Linux Chromium environment and do not commit platform-specific files generated on another OS. The `web-smoke` pull request workflow uploads actual screenshots, diffs and traces from `apps/web/test-results/` together with the tracked expected baselines when a test fails. These browser checks do not claim pixel-perfect equivalence with OBS CEF; that remains a separate manual gate.
+Inspect the changed PNG files under `apps/web/e2e/visual-regression.spec.ts-snapshots/` before committing them. Baselines are intentionally managed for the `chromium-linux` project (`*-chromium-linux.png`), matching the Ubuntu Chromium environment in GitHub Actions. Baseline generation on macOS or Windows is not canonical; use the same Linux Chromium environment and do not commit platform-specific files generated on another OS. The `web-smoke` pull request workflow uploads actual screenshots, diffs and traces from `apps/web/test-results/` together with the tracked expected baselines when a test fails. These browser checks do not claim pixel-perfect equivalence with OBS CEF; verify that separately in OBS.
 
 Pull requests run the `quality` check on a clean checkout. It uses Bun 1.4.2, installs with the frozen lockfile, prepares deterministic fixtures inside the ignored runtime paths, and runs the API type check, Web and Admin lint/build, and spellcheck. `admin-smoke` verifies management create/update flows and environment checks using a mock API. The tracked TypeScript adapters and schema SQL make these checks independent of `.env.local`, the local database, the CDN and the Ikaclo API.
 
@@ -174,11 +183,11 @@ GitHub Pages must use **GitHub Actions** as its publishing source in the reposit
 
 ## How it works
 
-**Types flow from the API into the web app.** `apps/api/src/index.ts` exports `type App = typeof app`, and `apps/web/src/lib/api.ts` builds an Eden Treaty client from it. The web app imports the API's source types across the workspace, so changing a route immediately changes the types on the front end. Requests go through typed calls such as `api.overlay.matchup.get()` rather than direct `fetch` calls.
+**Types flow from the API into the web app**. `apps/api/src/index.ts` exports `type App = typeof app`, and `apps/web/src/lib/api.ts` builds an Eden Treaty client from it. The web app imports the API's source types across the workspace, so changing a route immediately changes the types on the front end. Requests go through typed calls such as `api.overlay.matchup.get()` rather than direct `fetch` calls.
 
-**The Dock only hands over selection IDs and presentation settings.** API responses are never sent over the channel or stored in `localStorage`; the Overlay fetches the data again from the API, which keeps the backend the single source of truth. `apps/web/src/lib/overlay-state.ts` sends changes over a `BroadcastChannel` and keeps only the latest selection in `localStorage`, so the Dock and the Overlay can restore it after a reload or an OBS restart. One-off events such as the stage reveal are never stored, so a restart does not replay them. The Dock and the Overlay are separate pages both in OBS and in the Debug view, where the Overlay is an iframe, so both setups use the same path.
+**The Dock only hands over selection IDs and presentation settings**. API responses are never sent over the channel or stored in `localStorage`; the Overlay fetches the data again from the API, which keeps the backend the single source of truth. `apps/web/src/lib/overlay-state.ts` sends changes over a `BroadcastChannel` and keeps only the latest selection in `localStorage`, so the Dock and the Overlay can restore it after a reload or an OBS restart. One-off events such as the stage reveal are never stored, so a restart does not replay them. The Dock and the Overlay are separate pages both in OBS and in the Debug view, where the Overlay is an iframe, so both setups use the same path.
 
-**The canvas size is a constant.** `apps/web/src/lib/overlay-canvas.ts` holds 1920 × 1080, and both the Overlay and the Debug preview read it from there.
+**The canvas size is a constant**. `apps/web/src/lib/overlay-canvas.ts` holds 1920 × 1080, and both the Overlay and the Debug preview read it from there.
 
 ## Data sources
 
@@ -189,19 +198,19 @@ The default `API_DATA_SOURCE=json` mode reads these editable files directly:
 
 The Elysia routes and their response schemas stay the same in both modes. This keeps JSON editing fast while the model is unsettled and avoids coupling the web app to the storage choice.
 
-Use `dev:d1` or `dev:admin:local` for local D1, and the `dev:admin:production` setup above for production writes. Both use the API Worker's `DB` binding. The production target is configured in the ignored `apps/api/wrangler.production.toml`, with authentication handled by Wrangler.
+Use `dev:d1` or `dev:admin:local` for local D1, and the `dev:admin:production` setup above for production writes. Both use the API Worker's `DB` binding. Admin selects the deployed API using `VITE_PRODUCTION_API_URL`; maintenance commands select D1 through the ignored `apps/api/wrangler.production.toml` and Wrangler authentication.
 
 SQL migrations live in `apps/api/src/db/migrations/`. Run `bun run db:migrate` once after creating an empty D1 database and after each schema change. To populate an empty database with the current JSON development data, run `D1_SEED_DEVELOPMENT_DATA=1 bun run db:setup` instead. The seed records its version and preserves existing rows on later runs; editing JSON afterward does not update D1.
 
 Existing Turso rows are **not** copied by changing `API_DATA_SOURCE`. Export the complete source SQLite database to SQL, remove its `BEGIN TRANSACTION` and `COMMIT` lines as required by D1, and import that SQL into a _new empty_ D1 database with `wrangler d1 execute <DATABASE_NAME> --remote --file=<DUMP.sql>`. Importing the complete dump carries `schema_migrations` and `seed_history`; do not run `db:migrate` or `db:setup` first against the destination. Compare table row counts before switching the API. Keep the dump outside Git and retain the Turso source until the D1 data has been checked. See [Cloudflare's import guide](https://developers.cloudflare.com/d1/best-practices/import-export-data/).
 
-The legacy Bun API `API_DATA_SOURCE=d1` adapter remains as a separate HTTP query API path requiring `CLOUDFLARE_ACCOUNT_ID`, `D1_DATABASE_ID`, and `CLOUDFLARE_API_TOKEN`. The current production Admin, migration, and seed commands use Wrangler instead.
+The legacy Bun API `API_DATA_SOURCE=d1` adapter remains as a separate HTTP query API path requiring `CLOUDFLARE_ACCOUNT_ID`, `D1_DATABASE_ID`, and `CLOUDFLARE_API_TOKEN`. Production Admin uses the deployed API and its Bearer token; migration and seed commands use Wrangler instead.
 
 ## Separate Cloudflare Workers (prepared, not deployed)
 
 `apps/api/src/worker.ts` uses the same Elysia routes and response types as the Bun entry, with the [experimental Elysia Cloudflare adapter](https://elysiajs.com/integrations/cloudflare-worker). `apps/api/wrangler.local.toml` is for local development only and must not be deployed. `apps/web/wrangler.toml.example` serves the Vite output as static assets; `apps/api/wrangler.toml.example` binds an existing D1 database for deployment. Copy each example to `wrangler.toml` and replace all placeholders before deployment. JSON development does not invoke Wrangler.
 
-1. Create or migrate the D1 database as described above. Put its **existing** database ID and name into the API Wrangler config. The API Worker uses `DB`. Specify the same D1 database in the local production Admin and public API configurations. Leave `ADMIN_API_TOKEN` unset on the public API; manage data through the local API.
+1. Create or migrate the D1 database as described above. Put its **existing** database ID and name into the API Wrangler config. The API Worker uses `DB`. Specify the same D1 database in the maintenance and deployed API configurations. Enable Admin access on the deployed API with the Secret and origin settings described above.
 2. Set the API config's `CATALOG_URL` and `IKACLO_API_ORIGIN`, and set `CORS_ALLOWED_ORIGINS` to the final Web Worker origin. The Web origin must be exact, including scheme; list multiple origins separated by commas if needed.
 3. Deploy the API from `apps/api/` with `bunx wrangler@4.136.3 deploy --config wrangler.toml`. Set `VITE_API_URL` to that API Worker URL **before** building the Web app, for example in `apps/web/.env.production`. Then run `bun run --filter web build` at the repository root and deploy from `apps/web/` with `bunx wrangler@4.136.3 deploy --config wrangler.toml`.
 4. Open the deployed Debug and Overlay views, check API requests and CORS, and verify the OBS Browser Source separately. Dock, Debug and Overlay must remain on the same **Web** origin for `BroadcastChannel` and `localStorage` to work; the API can have another origin.
@@ -226,7 +235,9 @@ Rules contain `id`, Japanese `name`, English `en` and `description`; stages cont
 
 The local `weapons.json`, `rules.json` and `stages.json` under [`apps/api/src/data/`](./apps/api/src/data/) are runtime inputs and remain outside Git. To update one, publish the remote catalog, remove only the corresponding local file, and restart the API. The preparation script downloads the missing file again. CI does not use the CDN: `scripts/prepare-ci-fixtures.ts` writes small deterministic fixtures into these ignored paths before the quality checks.
 
-Weapon images are resolved together when `/overlay/matchup` loads. The API collects the distinct numeric weapon IDs in that matchup and calls the HTTPS origin configured by `IKACLO_API_ORIGIN`, validating both the weapon and returned image URL. Each ID is requested at most once during the lifetime of the API process: concurrent matchups share the same in-flight request, and later Overlay reloads or matchup changes reuse its cached result. Failed lookups are cached too, so there is no polling or automatic retry; restarting the API clears the cache. The browser keeps all four carousel slides mounted, but activates weapon image elements progressively: Team A, the next slide, loads initially, and Team B starts loading when Team A becomes active, one full slide interval before it is shown. Once activated, images remain mounted, so changing slides does not refetch weapon details or remount loaded images. Changing only the Dock accent color also does not reload matchup data.
+Weapon images are resolved together when `/overlay/matchup` loads. The API collects the distinct numeric weapon IDs in that matchup and calls the HTTPS origin configured by `IKACLO_API_ORIGIN`, validating both the weapon and returned image URL. Each ID is requested at most once during the lifetime of the API process: concurrent matchups share the same in-flight request, and later Overlay reloads or matchup changes reuse its cached result. Failed lookups are cached too, so there is no polling or automatic retry; restarting the API clears the cache.
+
+The browser keeps all four carousel slides mounted, but activates weapon image elements progressively: Team A, the next slide, loads initially, and Team B starts loading when Team A becomes active, one full slide interval before it is shown. Once activated, images remain mounted, so changing slides does not refetch weapon details or remount loaded images. Changing only the Dock accent color also does not reload matchup data.
 
 The catalogs are independent of `API_DATA_SOURCE`. SQL stores selected weapon IDs and their display order, but it has no weapon, rule or stage master tables and no foreign key to an external catalog. Both JSON and D1 modes resolve catalog IDs through the same in-memory indexes, and the UI reads them through the Elysia API.
 

@@ -2,7 +2,7 @@ import { defineConfig, devices } from '@playwright/test'
 
 const apiUrls = {
   VITE_LOCAL_API_URL: 'http://127.0.0.1:8787',
-  VITE_PRODUCTION_API_URL: 'http://127.0.0.1:3000',
+  VITE_PRODUCTION_API_URL: 'https://api.example.test',
 }
 
 export default defineConfig({

@@ -22,10 +22,13 @@ import type { OverlayMatchup } from "../lib/api";
 import {
   DEFAULT_ACCENT_COLOR,
   getOverlaySelection,
+  publishStageRevealAcknowledgement,
+  publishStageRevealActivity,
   subscribeStageReveal,
+  subscribeStageRevealActivityRequest,
   subscribeOverlaySelection,
 } from "../lib/overlay-state";
-import type { StageRevealRequest } from "../lib/overlay-state";
+import type { OverlaySelection, StageRevealRequest } from "../lib/overlay-state";
 
 const SLIDE_DURATION_MS = 8_000;
 const STAGE_REVEAL_ENTER_DURATION_MS = 2_600;
@@ -33,9 +36,58 @@ const STAGE_REVEAL_EXIT_DURATION_MS = 1_800;
 const STAGE_REVEAL_VIDEO_START_DELAY_MS = 1_450;
 const STAGE_REVEAL_REDUCED_DURATION_MS = 150;
 const STAGE_REVEAL_EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
-const STAGE_REVEAL_VIDEO_URL =
-  "https://inkling-obs-streamkit.toy101-mov.org/stage-video/rainmaker-urchin_underpass.webm";
+const STAGE_REVEAL_VIDEO_BASE_URL =
+  "https://inkling-obs-streamkit.toy101-mov.org";
+const STAGE_REVEAL_DEFAULT_VIDEO_URL = "/stage-background-default.webm";
 const STAGE_REVEAL_VIGNETTE_URL = "/stage-reveal-vignette.png";
+
+type DefaultStageVideoRequest = {
+  promise: Promise<Blob>;
+  source: "preload" | "playback";
+};
+
+// Keep the Blob for this page's lifetime; each playback owns its object URL.
+let defaultStageVideoRequest: DefaultStageVideoRequest | null = null;
+
+function loadDefaultStageVideo(
+  source: DefaultStageVideoRequest["source"],
+): DefaultStageVideoRequest {
+  if (!defaultStageVideoRequest) {
+    const request: DefaultStageVideoRequest = {
+      promise: fetch(STAGE_REVEAL_DEFAULT_VIDEO_URL).then(async (response) => {
+        if (!response.ok) {
+          throw new Error(
+            `既定ステージ動画のダウンロードに失敗しました: ${response.status}`,
+          );
+        }
+        return response.blob();
+      }),
+      source,
+    };
+    defaultStageVideoRequest = request;
+    void request.promise.catch(() => {
+      if (defaultStageVideoRequest === request) defaultStageVideoRequest = null;
+    });
+  }
+  return defaultStageVideoRequest;
+}
+
+async function loadDefaultStageVideoForPlayback(
+  signal: AbortSignal,
+): Promise<Blob> {
+  const request = loadDefaultStageVideo("playback");
+  try {
+    return await request.promise;
+  } catch (error) {
+    if (signal.aborted || request.source !== "preload") {
+      throw error;
+    }
+
+    // Retry once only when this playback shared the in-flight preload.
+    if (defaultStageVideoRequest === request) defaultStageVideoRequest = null;
+    return loadDefaultStageVideo("playback").promise;
+  }
+}
 
 type OverlayTeam = OverlayMatchup["alpha"];
 type OverlayPlayer = OverlayTeam["players"][number];
@@ -490,6 +542,7 @@ function OverlayCarousel({
 }
 
 type LoadedMatchup = {
+  carouselSelectionKey: string;
   dataSelectionKey: string;
   matchup: OverlayMatchup | null;
 };
@@ -551,6 +604,49 @@ export function Overlay() {
   const [debugStageRevealSelection, setDebugStageRevealSelection] =
     useState<DebugStageRevealSelection>({ ruleId: "", stageId: "" });
   const stageRevealVideoRef = useRef<HTMLVideoElement>(null);
+  const stageRevealBusyRef = useRef(false);
+  const pendingSelectionRef = useRef<{
+    selection: OverlaySelection | null;
+  } | null>(null);
+  const stageRevealActive = stageRevealRequest !== null || stageRevealPlayback !== null;
+
+  useEffect(() => {
+    const publishCurrentActivity = () =>
+      publishStageRevealActivity(stageRevealBusyRef.current);
+    publishCurrentActivity();
+    const unsubscribe = subscribeStageRevealActivityRequest((queryId) =>
+      publishStageRevealActivity(stageRevealBusyRef.current, queryId),
+    );
+    window.addEventListener("pageshow", publishCurrentActivity);
+    return () => {
+      unsubscribe();
+      window.removeEventListener("pageshow", publishCurrentActivity);
+    };
+  }, []);
+
+  useEffect(() => {
+    stageRevealBusyRef.current = stageRevealActive;
+    publishStageRevealActivity(stageRevealActive);
+    if (!stageRevealActive && pendingSelectionRef.current) {
+      const { selection: pendingSelection } = pendingSelectionRef.current;
+      pendingSelectionRef.current = null;
+      setSelection(pendingSelection);
+    }
+  }, [stageRevealActive]);
+
+  useEffect(() => {
+    const clearActivity = () => publishStageRevealActivity(false);
+    window.addEventListener("pagehide", clearActivity);
+    return () => {
+      window.removeEventListener("pagehide", clearActivity);
+      clearActivity();
+    };
+  }, []);
+
+  useEffect(() => {
+    // Preloading must not block the overlay or report a playback failure.
+    void loadDefaultStageVideo("preload").promise.catch(() => {});
+  }, []);
 
   const tournamentId = selection?.tournamentId ?? "";
   const alphaTournamentTeamId = selection?.alphaTournamentTeamId ?? "";
@@ -560,6 +656,11 @@ export function Overlay() {
   const accentColor = selection?.accentColor ?? DEFAULT_ACCENT_COLOR;
   const matchLabel = selection?.matchLabel ?? "";
   const showPositions = selection?.showPositions ?? true;
+  const carouselSelectionKey = [
+    tournamentId,
+    alphaTournamentTeamId,
+    bravoTournamentTeamId,
+  ].join(":");
   const dataSelectionKey = getMatchupDataSelectionKey({
     tournamentId,
     alphaTournamentTeamId,
@@ -585,13 +686,27 @@ export function Overlay() {
     : null;
 
   useEffect(() => {
-    return subscribeOverlaySelection(setSelection);
+    return subscribeOverlaySelection((nextSelection) => {
+      if (stageRevealBusyRef.current) {
+        pendingSelectionRef.current = { selection: nextSelection };
+        return;
+      }
+      setSelection(nextSelection);
+    });
   }, []);
 
   useEffect(() => {
-    return subscribeStageReveal((request) =>
-      setStageRevealRequest({ ...request, loop: false }),
-    );
+    return subscribeStageReveal((request) => {
+      const accepted = !stageRevealBusyRef.current;
+      if (accepted) {
+        stageRevealBusyRef.current = true;
+      }
+      publishStageRevealActivity(true);
+      publishStageRevealAcknowledgement(request.requestId, accepted);
+      if (accepted) {
+        setStageRevealRequest({ ...request, loop: false });
+      }
+    });
   }, []);
 
   useEffect(() => {
@@ -619,6 +734,7 @@ export function Overlay() {
         return;
       }
 
+      stageRevealBusyRef.current = true;
       setStageRevealRequest({
         requestId: crypto.randomUUID(),
         ruleId,
@@ -656,16 +772,20 @@ export function Overlay() {
 
     const downloadStageVideo = async () => {
       try {
-        const response = await fetch(STAGE_REVEAL_VIDEO_URL, {
+        // R2 filenames use the catalog's English slug (e.g. scorch_gorge).
+        const stageVideoUrl = `${STAGE_REVEAL_VIDEO_BASE_URL}/stage-video/${encodeURIComponent(stageRevealMatchup.stage.id)}.webm`;
+        const response = await fetch(stageVideoUrl, {
           signal: controller.signal,
         });
-        if (!response.ok) {
+        if (!response.ok && response.status !== 404) {
           throw new Error(
             `ステージ動画のダウンロードに失敗しました: ${response.status}`,
           );
         }
 
-        const videoBlob = await response.blob();
+        const videoBlob = response.status === 404
+          ? await loadDefaultStageVideoForPlayback(controller.signal)
+          : await response.blob();
         if (controller.signal.aborted) {
           return;
         }
@@ -709,10 +829,13 @@ export function Overlay() {
     const prefersReducedMotion = window.matchMedia(
       "(prefers-reduced-motion: reduce)",
     ).matches;
+    const exitDuration = prefersReducedMotion
+      ? STAGE_REVEAL_REDUCED_DURATION_MS
+      : STAGE_REVEAL_EXIT_DURATION_MS;
     const transitionDuration = prefersReducedMotion
       ? STAGE_REVEAL_REDUCED_DURATION_MS
       : stageRevealPlayback.phase === "exiting"
-        ? STAGE_REVEAL_EXIT_DURATION_MS
+        ? exitDuration
         : STAGE_REVEAL_ENTER_DURATION_MS;
     const videoStartDelay = prefersReducedMotion
       ? 0
@@ -787,6 +910,31 @@ export function Overlay() {
       };
     }
 
+    if (stageRevealPlayback.phase === "playing" && !stageRevealPlayback.loop) {
+      const video = stageRevealVideoRef.current;
+      if (!video) return;
+
+      let frameId = 0;
+      const checkRemainingTime = () => {
+        if (
+          !video.paused && !video.ended && !video.seeking &&
+          Number.isFinite(video.duration) && video.duration > 0 &&
+          video.playbackRate > 0 &&
+          (video.duration - video.currentTime) / video.playbackRate <= exitDuration / 1_000
+        ) {
+          setStageRevealPlayback((current) =>
+            current?.requestId === requestId && current.phase === "playing"
+              ? { ...current, phase: "exiting" }
+              : current,
+          );
+          return;
+        }
+        frameId = window.requestAnimationFrame(checkRemainingTime);
+      };
+      frameId = window.requestAnimationFrame(checkRemainingTime);
+      return () => window.cancelAnimationFrame(frameId);
+    }
+
     if (stageRevealPlayback.phase === "exiting") {
       const timeoutId = window.setTimeout(() => {
         setStageRevealPlayback(null);
@@ -824,7 +972,7 @@ export function Overlay() {
       });
 
       if (!cancelled) {
-        setLoaded({ dataSelectionKey, matchup: data });
+        setLoaded({ carouselSelectionKey, dataSelectionKey, matchup: data });
       }
     };
 
@@ -836,6 +984,7 @@ export function Overlay() {
   }, [
     alphaTournamentTeamId,
     bravoTournamentTeamId,
+    carouselSelectionKey,
     dataSelectionKey,
     loaded?.dataSelectionKey,
     ruleId,
@@ -844,7 +993,7 @@ export function Overlay() {
   ]);
 
   const matchup =
-    loaded?.dataSelectionKey === dataSelectionKey ? loaded.matchup : null;
+    loaded?.carouselSelectionKey === carouselSelectionKey ? loaded.matchup : null;
   const previewRule = stageRevealPlayback?.loop
     ? rules.find((rule) => rule.id === debugStageRevealSelection.ruleId)
     : null;
@@ -871,7 +1020,7 @@ export function Overlay() {
 
       {matchup && (
         <OverlayCarousel
-          key={dataSelectionKey}
+          key={carouselSelectionKey}
           matchup={matchup}
           matchLabel={matchLabel}
           showPositions={showPositions}
@@ -886,13 +1035,17 @@ export function Overlay() {
             loop={stageRevealPlayback.loop}
             onEnded={() =>
               setStageRevealPlayback((current) =>
-                current && !current.loop ? { ...current, phase: "exiting" } : current,
+                current && !current.loop && current.phase !== "exiting"
+                  ? { ...current, phase: "exiting" }
+                  : current,
               )
             }
             onError={() => {
               console.error("ステージ動画を再生できませんでした");
               setStageRevealPlayback((current) =>
-                current ? { ...current, phase: "exiting" } : current,
+                current && current.phase !== "exiting"
+                  ? { ...current, phase: "exiting" }
+                  : current,
               );
             }}
             playsInline

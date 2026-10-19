@@ -12,6 +12,9 @@ function isLoopback(hostname: string): boolean {
 
 function readApiUrl(value: unknown, fallback: string, name: string): string {
   const candidate = typeof value === 'string' && value.trim() !== '' ? value : fallback
+  if (!candidate) {
+    throw new Error(`${name} にデプロイ済み API Worker の URL を設定してください。`)
+  }
   let url: URL
   try {
     url = new URL(candidate)
@@ -29,25 +32,25 @@ function readApiUrl(value: unknown, fallback: string, name: string): string {
   return url.href.replace(/\/$/, '')
 }
 
-export const targetConfigs: Record<AdminTarget, TargetConfig> = {
-  local: {
-    id: 'local',
+export function readTargetConfig(target: AdminTarget): TargetConfig {
+  if (target === 'local') return {
+    id: target,
     label: 'ローカル D1',
     apiUrl: readApiUrl(
       import.meta.env.VITE_LOCAL_API_URL,
       'http://127.0.0.1:8787',
       'VITE_LOCAL_API_URL',
     ),
-  },
-  production: {
-    id: 'production',
+  }
+  return {
+    id: target,
     label: '本番環境 D1',
     apiUrl: readApiUrl(
       import.meta.env.VITE_PRODUCTION_API_URL,
-      'http://127.0.0.1:3000',
+      '',
       'VITE_PRODUCTION_API_URL',
     ),
-  },
+  }
 }
 
 export function readAdminTarget(value: unknown): AdminTarget {
