@@ -30,7 +30,7 @@ type CatalogStore = {
   weapons: CatalogIndex<Weapon>;
 };
 
-let store: CatalogStore | null = null;
+let store: CatalogDataSource | null = null;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -198,8 +198,9 @@ function parseCatalogBytes(
 
 async function loadCatalog<T extends CatalogItem>(
   definition: CatalogDefinition<T>,
+  directory: URL,
 ): Promise<LoadedCatalog<T>> {
-  const catalogUrl = new URL(`./data/${definition.fileName}`, import.meta.url);
+  const catalogUrl = new URL(definition.fileName, directory);
   const location = catalogUrl.pathname;
   const value = await readCatalogJson(catalogUrl, definition.catalogName, location);
   return { ...parseCatalog(value, definition), location };
@@ -244,7 +245,7 @@ async function loadRemoteCatalog<T extends CatalogItem>(
   return { ...parseCatalog(value, definition), location: url.href };
 }
 
-function getStore(): CatalogStore {
+function getStore(): CatalogDataSource {
   if (store === null) {
     throw new Error("Catalog store has not been initialized.");
   }
@@ -254,13 +255,11 @@ function getStore(): CatalogStore {
 export async function initializeCatalogStore(): Promise<void> {
   if (store !== null) return;
 
-  const [weapons, rules, stages] = await Promise.all([
-    loadCatalog(WEAPON_CATALOG),
-    loadCatalog(RULE_CATALOG),
-    loadCatalog(STAGE_CATALOG),
-  ]);
+  const { weapons, rules, stages } = await loadLocalCatalogs(
+    new URL("./data/", import.meta.url),
+  );
 
-  store = { weapons, rules, stages };
+  store = createCatalogDataSource({ weapons, rules, stages });
   for (const [definition, loaded] of [
     [WEAPON_CATALOG, weapons],
     [RULE_CATALOG, rules],
@@ -289,37 +288,64 @@ export async function initializeRemoteCatalogStore(baseUrlValue: string): Promis
     loadRemoteCatalog(RULE_CATALOG, baseUrl),
     loadRemoteCatalog(STAGE_CATALOG, baseUrl),
   ]);
-  store = { weapons, rules, stages };
+  store = createCatalogDataSource({ weapons, rules, stages });
+}
+
+function createCatalogDataSource(catalogs: CatalogStore): CatalogDataSource {
+  return {
+    listWeapons: () => catalogs.weapons.items,
+    listRules: () => catalogs.rules.items,
+    listStages: () => catalogs.stages.items,
+    findRule: (ruleId) => catalogs.rules.itemsById.get(ruleId) ?? null,
+    findStage: (stageId) => catalogs.stages.itemsById.get(stageId) ?? null,
+    requireWeapon(weaponId, source) {
+      const weapon = catalogs.weapons.itemsById.get(weaponId) ?? null;
+      if (weapon === null) {
+        throw new Error(
+          `Weapon catalog does not contain id ${weaponId} referenced by ${source}.`,
+        );
+      }
+      return weapon;
+    },
+  };
+}
+
+async function loadLocalCatalogs(directory: URL) {
+  const [weapons, rules, stages] = await Promise.all([
+    loadCatalog(WEAPON_CATALOG, directory),
+    loadCatalog(RULE_CATALOG, directory),
+    loadCatalog(STAGE_CATALOG, directory),
+  ]);
+  return { weapons, rules, stages };
+}
+
+// Load an independent local store without initializing the process-wide singleton.
+export async function createLocalCatalogDataSource(directory: URL): Promise<CatalogDataSource> {
+  return createCatalogDataSource(await loadLocalCatalogs(directory));
 }
 
 export function listWeapons(): Weapon[] {
-  return getStore().weapons.items;
+  return getStore().listWeapons();
 }
 
 export function listRules(): Rule[] {
-  return getStore().rules.items;
+  return getStore().listRules();
 }
 
 export function listStages(): Stage[] {
-  return getStore().stages.items;
+  return getStore().listStages();
 }
 
 export function findRule(ruleId: string): Rule | null {
-  return getStore().rules.itemsById.get(ruleId) ?? null;
+  return getStore().findRule(ruleId);
 }
 
 export function findStage(stageId: string): Stage | null {
-  return getStore().stages.itemsById.get(stageId) ?? null;
+  return getStore().findStage(stageId);
 }
 
 export function requireWeapon(weaponId: string, source: string): Weapon {
-  const weapon = getStore().weapons.itemsById.get(weaponId) ?? null;
-  if (weapon === null) {
-    throw new Error(
-      `Weapon catalog does not contain id ${weaponId} referenced by ${source}.`,
-    );
-  }
-  return weapon;
+  return getStore().requireWeapon(weaponId, source);
 }
 
 export const catalogDataSource: CatalogDataSource = {

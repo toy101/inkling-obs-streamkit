@@ -1,5 +1,11 @@
 [
   {
+    "id": "rule-2",
+    "name": "Rule Two",
+    "en": "Rule Two",
+    "description": "Second fixture rule."
+  },
+  {
     "id": "rule-1",
     "name": "Rule One",
     "en": "Rule One",

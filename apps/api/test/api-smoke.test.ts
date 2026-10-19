@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 
+import { createLocalCatalogDataSource } from "../src/catalog-store";
 import { createApp } from "../src/create-app";
-import {
-  createDataSource,
-  type CatalogDataSource,
-} from "../src/create-data-source";
+import { createDataSource } from "../src/create-data-source";
 import { createJsonDataSource } from "../src/data/json-data-source";
 import type { Rule, Stage, Weapon } from "../src/models/catalog";
 import type { OverlayMatchup } from "../src/models/overlay";
@@ -42,31 +44,8 @@ function requestUrl(input: RequestInfo | URL): string {
   return input instanceof Request ? input.url : String(input);
 }
 
-function createCatalogDataSource(): CatalogDataSource {
-  const rulesById = new Map(rules.map((rule) => [rule.id, rule]));
-  const stagesById = new Map(stages.map((stage) => [stage.id, stage]));
-  const weaponsById = new Map(weapons.map((weapon) => [weapon.id, weapon]));
-
-  return {
-    listWeapons: () => weapons,
-    listRules: () => rules,
-    listStages: () => stages,
-    findRule: (ruleId) => rulesById.get(ruleId) ?? null,
-    findStage: (stageId) => stagesById.get(stageId) ?? null,
-    requireWeapon(weaponId, source) {
-      const weapon = weaponsById.get(weaponId);
-      if (weapon === undefined) {
-        throw new Error(
-          `Weapon fixture does not contain id ${weaponId} referenced by ${source}.`,
-        );
-      }
-      return weapon;
-    },
-  };
-}
-
-function createTestApp() {
-  const catalogDataSource = createCatalogDataSource();
+async function createTestApp(directory = new URL("./fixtures/", import.meta.url)) {
+  const catalogDataSource = await createLocalCatalogDataSource(directory);
   const storageDataSource = createJsonDataSource({
     players,
     tournaments: tournaments.tournaments,
@@ -77,7 +56,29 @@ function createTestApp() {
   const dataSource = createDataSource({
     storageDataSource,
     catalogDataSource,
-    enrichMatchup: async (matchup) => matchup,
+    enrichMatchup: async (matchup) => {
+      const withImages = (player: OverlayMatchup["alpha"]["players"][number]) => ({
+        ...player,
+        weapons: player.weapons.map((weapon) => ({
+          ...weapon,
+          imageUrl: `https://images.test/weapons/${weapon.id}.png`,
+        })),
+      });
+      const withTeamImages = (team: OverlayMatchup["alpha"]): OverlayMatchup["alpha"] => ({
+        ...team,
+        players: [
+          withImages(team.players[0]),
+          withImages(team.players[1]),
+          withImages(team.players[2]),
+          withImages(team.players[3]),
+        ],
+      });
+      return {
+        ...matchup,
+        alpha: withTeamImages(matchup.alpha),
+        bravo: withTeamImages(matchup.bravo),
+      };
+    },
   });
 
   return createApp({
@@ -106,7 +107,8 @@ function matchupPath(overrides: Partial<Record<
 }
 
 async function get(path: string): Promise<Response> {
-  return createTestApp().handle(new Request(`http://api.test${path}`));
+  const app = await createTestApp();
+  return app.handle(new Request(`http://api.test${path}`));
 }
 
 beforeEach(() => {
@@ -131,6 +133,41 @@ afterEach(() => {
 });
 
 describe("API smoke", () => {
+  test.each(["ruleId", "stageId"] as const)(
+    "GET /overlay/matchup rejects an unknown %s with an empty body",
+    async (field) => {
+      const response = await get(matchupPath({ [field]: "missing" }));
+
+      expect(response.status).toBe(200);
+      expect(await response.text()).toBe("");
+    },
+  );
+
+  test.each(["weapons", "rules", "stages"] as const)(
+    "invalid local %s prevents API construction",
+    async (catalog) => {
+      const directory = await mkdtemp(join(tmpdir(), "inkling-api-catalog-"));
+      const url = new URL(pathToFileURL(`${directory}/`).href);
+      try {
+        for (const name of ["weapons", "rules", "stages"]) {
+          await Bun.write(
+            new URL(`${name}.json`, url),
+            Bun.file(new URL(`./fixtures/${name}.json`, import.meta.url)),
+          );
+        }
+        await Bun.write(new URL(`${catalog}.json`, url), "[]");
+
+        await expect(createTestApp(url)).rejects.toThrow(/catalog must not be empty/);
+        // A failed instance must not contaminate a subsequent valid instance.
+        const response = await get(`/${catalog}`);
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual({ weapons, rules, stages }[catalog]);
+      } finally {
+        await rm(directory, { recursive: true, force: true });
+      }
+    },
+  );
+
   test("GET /weapons returns the weapon fixture", async () => {
     const response = await get("/weapons");
 
@@ -165,11 +202,15 @@ describe("API smoke", () => {
     expect(matchup.alpha.players).toHaveLength(4);
     expect(matchup.bravo.id).toBe("team-bravo");
     expect(matchup.bravo.players).toHaveLength(4);
-    expect(matchup.rule).toEqual(rules[0]);
-    expect(matchup.stage).toEqual(stages[0]);
-    expect(matchup.alpha.players[0]?.weapons).toEqual([
-      { ...weapons[0], imageUrl: null },
-    ]);
+    expect(matchup.rule).toEqual(rules[1]);
+    expect(matchup.stage).toEqual(stages[1]);
+    for (const team of [matchup.alpha, matchup.bravo]) {
+      for (const player of team.players) {
+        expect(player.weapons).toEqual([
+          { id: "1", name: "Weapon One", imageUrl: "https://images.test/weapons/1.png" },
+        ]);
+      }
+    }
   });
 
   test("GET /overlay/matchup rejects the same team on both sides", async () => {
@@ -191,7 +232,7 @@ describe("API smoke", () => {
   });
 
   test("JSON mode normalizes legacy teams and excludes explicit hidden teams", async () => {
-    const catalogDataSource = createCatalogDataSource();
+    const catalogDataSource = await createLocalCatalogDataSource(new URL("./fixtures/", import.meta.url));
     const storage = createJsonDataSource({
       players,
       tournaments: tournaments.tournaments,
