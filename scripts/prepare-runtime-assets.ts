@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 const DEFAULT_CDN_BASE_URL =
   "https://inkling-obs-streamkit.toy101-mov.org/";
 export const MAX_CATALOG_BYTES = 64 * 1024;
+export const MAX_DEFAULT_STAGE_VIDEO_BYTES = 10 * 1024 * 1024;
 
 type RuntimeAssetTarget = "api" | "web";
 
@@ -67,6 +68,16 @@ function validatePng(bytes: Uint8Array): void {
   }
 }
 
+function validateWebm(bytes: Uint8Array): void {
+  const ebmlSignature = [0x1a, 0x45, 0xdf, 0xa3];
+  if (
+    bytes.byteLength < ebmlSignature.length ||
+    !ebmlSignature.every((value, index) => bytes[index] === value)
+  ) {
+    throw new Error("Video response is not a valid WebM file.");
+  }
+}
+
 function getAssets(
   target: RuntimeAssetTarget,
   options: PrepareAssetsOptions,
@@ -74,11 +85,13 @@ function getAssets(
   const workspaceRoot = resolve(import.meta.dir, "..");
 
   if (target === "web") {
+    const destinationDirectory =
+      options.destinationDirectory ?? resolve(workspaceRoot, "apps/web/public");
     return [
       {
         contentType: "image/png",
         destinationPath: resolve(
-          options.destinationDirectory ?? resolve(workspaceRoot, "apps/web/public"),
+          destinationDirectory,
           "stage-reveal-vignette.png",
         ),
         maxBytes: 5 * 1024 * 1024,
@@ -87,6 +100,19 @@ function getAssets(
           DEFAULT_CDN_BASE_URL,
         ),
         validate: validatePng,
+      },
+      {
+        contentType: "video/webm",
+        destinationPath: resolve(
+          destinationDirectory,
+          "stage-background-default.webm",
+        ),
+        maxBytes: MAX_DEFAULT_STAGE_VIDEO_BYTES,
+        sourceUrl: new URL(
+          "stage-background-default.webm",
+          DEFAULT_CDN_BASE_URL,
+        ),
+        validate: validateWebm,
       },
     ];
   }

@@ -11,6 +11,7 @@ import { join } from "node:path";
 
 import {
   MAX_CATALOG_BYTES,
+  MAX_DEFAULT_STAGE_VIDEO_BYTES,
   parseCatalogBaseUrl,
   prepareAssets,
   type AssetFetcher,
@@ -36,6 +37,17 @@ async function createTemporaryDirectory(): Promise<string> {
 function jsonResponse(
   body: Uint8Array | string,
   contentType = "application/json; charset=utf-8",
+  status = 200,
+): Response {
+  return new Response(body as BodyInit, {
+    status,
+    headers: { "content-type": contentType },
+  });
+}
+
+function assetResponse(
+  body: Uint8Array | string,
+  contentType: string,
   status = 200,
 ): Response {
   return new Response(body as BodyInit, {
@@ -254,4 +266,110 @@ describe("prepareRuntimeAssets API catalogs", () => {
       "CATALOG_URL must use HTTP or HTTPS.",
     );
   });
+});
+
+describe("prepareRuntimeAssets web assets", () => {
+  const pngBytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+  const webmBytes = new Uint8Array([0x1a, 0x45, 0xdf, 0xa3, 0x01]);
+
+  test("downloads and validates each missing web asset", async () => {
+    const directory = await createTemporaryDirectory();
+    const { fetcher, requests } = createFetcher((url) => {
+      if (url.pathname === "/stage-reveal-vignette.png") {
+        return assetResponse(pngBytes, "image/png");
+      }
+      if (url.pathname === "/stage-background-default.webm") {
+        return assetResponse(webmBytes, "video/webm");
+      }
+      throw new Error(`Unexpected asset URL: ${url}`);
+    });
+
+    await prepareAssets("web", { destinationDirectory: directory, fetcher });
+
+    expect(requests.sort()).toEqual(
+      [
+        "https://inkling-obs-streamkit.toy101-mov.org/stage-background-default.webm",
+        "https://inkling-obs-streamkit.toy101-mov.org/stage-reveal-vignette.png",
+      ].sort(),
+    );
+    expect(
+      new Uint8Array(
+        await readFile(join(directory, "stage-reveal-vignette.png")),
+      ),
+    ).toEqual(pngBytes);
+    expect(
+      new Uint8Array(
+        await readFile(join(directory, "stage-background-default.webm")),
+      ),
+    ).toEqual(webmBytes);
+  });
+
+  test(
+    "reuses existing web assets without fetching or changing them",
+    async () => {
+      const directory = await createTemporaryDirectory();
+      await Promise.all([
+        writeFile(join(directory, "stage-reveal-vignette.png"), pngBytes),
+        writeFile(join(directory, "stage-background-default.webm"), webmBytes),
+      ]);
+      const { fetcher, requests } = createFetcher(() => {
+        throw new Error("fetch should not be called for existing files");
+      });
+
+      await prepareAssets("web", { destinationDirectory: directory, fetcher });
+
+      expect(requests).toEqual([]);
+      expect(
+        new Uint8Array(
+          await readFile(join(directory, "stage-background-default.webm")),
+        ),
+      ).toEqual(webmBytes);
+    },
+  );
+
+  const rejectedWebmResponses: Array<{
+    name: string;
+    response: () => Response;
+  }> = [
+    {
+      name: "a non-WebM content type",
+      response: () => assetResponse(webmBytes, "application/octet-stream"),
+    },
+    {
+      name: "an empty response",
+      response: () => assetResponse("", "video/webm"),
+    },
+    {
+      name: "a response over 10 MiB",
+      response: () =>
+        assetResponse(
+          new Uint8Array(MAX_DEFAULT_STAGE_VIDEO_BYTES + 1),
+          "video/webm",
+        ),
+    },
+    {
+      name: "an invalid EBML signature",
+      response: () =>
+        assetResponse(
+          new Uint8Array([0x00, 0x45, 0xdf, 0xa3]),
+          "video/webm",
+        ),
+    },
+  ];
+
+  for (const { name, response } of rejectedWebmResponses) {
+    test(`rejects ${name} without leaving a file`, async () => {
+      const directory = await createTemporaryDirectory();
+      await writeFile(join(directory, "stage-reveal-vignette.png"), pngBytes);
+      const { fetcher } = createFetcher(response);
+
+      await expect(
+        prepareAssets("web", { destinationDirectory: directory, fetcher }),
+      ).rejects.toThrow();
+
+      expect(
+        existsSync(join(directory, "stage-background-default.webm")),
+      ).toBe(false);
+    });
+  }
 });

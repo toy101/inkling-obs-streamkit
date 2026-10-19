@@ -13,9 +13,9 @@ import {
   type Tournament,
   type Weapon,
 } from './lib/api'
-import { readAdminTarget, targetConfigs } from './lib/config'
+import { readAdminTarget, readTargetConfig } from './lib/config'
 
-const config = targetConfigs[readAdminTarget(import.meta.env.VITE_ADMIN_TARGET)]
+const config = readTargetConfig(readAdminTarget(import.meta.env.VITE_ADMIN_TARGET))
 
 type View = 'tournaments' | 'players'
 
