@@ -1094,3 +1094,24 @@ test("別ページのDock要求もBroadcastChannelでOverlayへ届き、Blob動�
     await overlayPage.close();
   }
 });
+
+test("軽量背景でもステージ紹介を再生し、紹介中のモード変更を終了後に反映する", async ({ page, api }) => {
+  const root = await prepareDebug(page, api);
+  const mode = page.getByLabel("背景モード");
+  const background = root.locator(".overlay-background");
+  await mode.selectOption("lightweight");
+  await expect(background).toHaveAttribute("data-mode", "lightweight");
+  const requestCount = api.requests().length;
+  await page.getByRole("button", { name: "確定・動画再生", exact: true }).click();
+  await expect.poll(() => readDownloads(root)).toHaveLength(1);
+  await completeDownload(page, root);
+  await assertPlaying(page, root);
+  await assertRevealSelection(root);
+  await mode.selectOption("normal");
+  await expect(background).toHaveAttribute("data-mode", "lightweight");
+  await root.getByLabel("選択ステージ紹介動画").dispatchEvent("ended", { bubbles: false });
+  await page.clock.runFor(150);
+  await assertNoReveal(root);
+  await expect(background).toHaveAttribute("data-mode", "normal");
+  expect(api.requests()).toHaveLength(requestCount);
+});

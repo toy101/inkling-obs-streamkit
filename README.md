@@ -12,6 +12,8 @@ The flow is:
 
 Because the Dock, the Overlay and a Debug view all live in the same app, the overlay can be built and checked in a browser without launching OBS.
 
+The Dock’s **Background mode** selector switches between normal animation and a lightweight static background. Lightweight mode keeps both background layers and their colors while stopping their animations. The setting is synchronized to Overlay and Debug and restored after a reload. Existing selections use normal mode. Switching modes does not reload matchup data or reset the carousel; changes during a stage reveal apply after it finishes.
+
 The Dock's **Position display** button immediately shows or hides player positions on both team detail slides. Hiding positions keeps the weapon lists in the same place. The setting is saved with the current selection and restored after a reload; existing saved selections default to showing positions.
 
 ## Requirements

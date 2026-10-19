@@ -1013,7 +1013,11 @@ export function Overlay() {
 
   return (
     <main className="overlay" style={overlayStyle}>
-      <div className="overlay-background" aria-hidden="true">
+      <div
+        className="overlay-background"
+        data-mode={selection?.backgroundMode ?? "normal"}
+        aria-hidden="true"
+      >
         <div className="overlay-background-sweep" />
         <div className="overlay-background-rings" />
       </div>

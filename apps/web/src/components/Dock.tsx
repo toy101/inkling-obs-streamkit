@@ -369,6 +369,7 @@ export function Dock() {
       accentColor: submittedSelection?.accentColor ?? restoredSelection.current?.accentColor ?? DEFAULT_ACCENT_COLOR,
       matchLabel: submittedSelection?.matchLabel ?? restoredSelection.current?.matchLabel ?? "",
       showPositions: submittedSelection?.showPositions ?? restoredSelection.current?.showPositions ?? true,
+      backgroundMode: submittedSelection?.backgroundMode ?? restoredSelection.current?.backgroundMode ?? "normal",
     };
 
     commitSelection(nextSelection);
@@ -428,6 +429,13 @@ export function Dock() {
       ...submittedSelection,
       accentColor,
     });
+  };
+
+  const handleBackgroundModeChange = (
+    backgroundMode: OverlaySelection["backgroundMode"],
+  ) => {
+    if (!submittedSelection) return;
+    commitSelection({ ...submittedSelection, backgroundMode });
   };
 
   const handlePositionToggle = () => {
@@ -623,6 +631,19 @@ export function Dock() {
 
       <section className="dock-form" aria-labelledby="dock-position-heading">
         <h2 id="dock-position-heading">表示設定</h2>
+        <label>
+          背景モード
+          <select
+            value={submittedSelection?.backgroundMode ?? "normal"}
+            disabled={!submittedSelection}
+            onChange={(event) => handleBackgroundModeChange(
+              event.target.value === "lightweight" ? "lightweight" : "normal",
+            )}
+          >
+            <option value="normal">通常（アニメーション）</option>
+            <option value="lightweight">軽量（静止）</option>
+          </select>
+        </label>
         <button
           aria-pressed={showPositions}
           className="dock-submit"

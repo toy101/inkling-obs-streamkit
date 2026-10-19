@@ -12,6 +12,7 @@ const expectedSelection = {
   accentColor: "#8b5cf6",
   matchLabel: "",
   showPositions: true,
+  backgroundMode: "normal",
 };
 
 async function setStoredSelection(page: Page, value: string): Promise<void> {
@@ -260,6 +261,7 @@ test("未知の保存IDは有効な選択へ正規化して反映する", async 
     accentColor: "#123456",
     matchLabel: "未知",
     showPositions: false,
+    backgroundMode: "normal",
   });
   await expect(dock.getByRole("button", { name: "ポジション表示: オフ" })).toHaveAttribute("aria-pressed", "false");
 

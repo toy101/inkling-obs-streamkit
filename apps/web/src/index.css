@@ -337,6 +337,13 @@ html[data-view="overlay"] body {
   animation: overlay-vector-rings 20s cubic-bezier(0.45, 0, 0.55, 1) infinite;
 }
 
+/* Keep the background artwork, without continuous animation or layer hints. */
+.overlay-background[data-mode="lightweight"] .overlay-background-sweep,
+.overlay-background[data-mode="lightweight"] .overlay-background-rings {
+  animation: none;
+  will-change: auto;
+}
+
 /* Matchup layout */
 .overlay-matchup {
   position: relative;
