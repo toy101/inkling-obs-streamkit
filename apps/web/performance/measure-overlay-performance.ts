@@ -475,7 +475,7 @@ function summarize(runs: readonly Record<Phase, PhaseResult>[]) {
 
 const outputPath = Bun.argv[2];
 const requestedProfile = Bun.argv[3] ?? "long";
-if (!outputPath) throw new Error("Usage: bun run apps/web/scripts/measure-overlay-performance.ts OUTPUT [fixture|long|real]");
+if (!outputPath) throw new Error("Usage: bun run apps/web/performance/measure-overlay-performance.ts OUTPUT [fixture|long|real]");
 if (!["fixture", "long", "real"].includes(requestedProfile)) {
   throw new Error(`Unknown profile: ${requestedProfile}`);
 }

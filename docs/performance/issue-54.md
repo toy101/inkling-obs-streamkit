@@ -33,8 +33,8 @@ key 固定によって切替時の再生成と名前の計測を省けた。起�
 VITE_API_URL=http://127.0.0.1:3000 bun run --filter web build
 bun run --cwd apps/web vite preview --host 127.0.0.1 --port 4173 --strictPort
 # 別ターミナル
-bun run apps/web/scripts/measure-overlay-performance.ts /tmp/overlay-long.json long
-OVERLAY_PERF_PLAYERS=/path/to/players.json OVERLAY_PERF_TOURNAMENTS=/path/to/tournaments.json bun run apps/web/scripts/measure-overlay-performance.ts /tmp/overlay-real.json real
+bun run apps/web/performance/measure-overlay-performance.ts /tmp/overlay-long.json long
+OVERLAY_PERF_PLAYERS=/path/to/players.json OVERLAY_PERF_TOURNAMENTS=/path/to/tournaments.json bun run apps/web/performance/measure-overlay-performance.ts /tmp/overlay-real.json real
 ```
 
 比較するリビジョンごとに同じ手順でビルドと preview の再起動を行う。計測スクリプトは比較前後で同じものを使う。JSON と trace の要約には実名を含めず、生の trace も保存しない。
