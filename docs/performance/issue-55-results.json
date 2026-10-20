@@ -1,0 +1,370 @@
+{
+  "baselineCommit": "5061ccbe70731bfc112d67285d703a7a8a58bfb0",
+  "baselineResults": "issue-54-results.json: after-long and after-real",
+  "after-long": {
+    "schemaVersion": 1,
+    "profile": "long",
+    "conditions": {
+      "preview": "production Vite preview",
+      "harness": "1920x1080 iframe without Debug autoplay synchronization",
+      "viewport": {
+        "width": 1920,
+        "height": 1080,
+        "deviceScaleFactor": 1
+      },
+      "cacheDisabled": true,
+      "runCount": 3,
+      "slideSequence": [
+        0,
+        1,
+        2,
+        0
+      ],
+      "slideSequenceRepetitions": 3,
+      "animationControl": "prefers-reduced-motion: reduce",
+      "residualNoise": [
+        "Chromium process scheduling",
+        "JavaScript garbage collection",
+        "React and browser startup work outside OverlayName"
+      ],
+      "realProfileNamesRedacted": false
+    },
+    "runs": [
+      {
+        "startup": {
+          "counters": {
+            "boundingClientRectReads": 72,
+            "overlayNameTextReads": 52,
+            "resizeObserverCreated": 20,
+            "overlaySlideMounts": 3,
+            "overlayNameTextMounts": 20
+          },
+          "performance": {
+            "LayoutCount": 39,
+            "LayoutDuration": 0.011761,
+            "TaskDuration": 0.083263
+          },
+          "tracing": {
+            "rasterTaskCount": 158,
+            "rasterTaskCpuDurationMs": 217.972
+          }
+        },
+        "switching": {
+          "counters": {
+            "boundingClientRectReads": 0,
+            "overlayNameTextReads": 0,
+            "resizeObserverCreated": 0,
+            "overlaySlideMounts": 0,
+            "overlayNameTextMounts": 0
+          },
+          "performance": {
+            "LayoutCount": 9,
+            "LayoutDuration": 0.0007130000000000001,
+            "TaskDuration": 0.022465
+          },
+          "tracing": {
+            "rasterTaskCount": 318,
+            "rasterTaskCpuDurationMs": 355.988
+          }
+        }
+      },
+      {
+        "startup": {
+          "counters": {
+            "boundingClientRectReads": 72,
+            "overlayNameTextReads": 52,
+            "resizeObserverCreated": 20,
+            "overlaySlideMounts": 3,
+            "overlayNameTextMounts": 20
+          },
+          "performance": {
+            "LayoutCount": 39,
+            "LayoutDuration": 0.01297,
+            "TaskDuration": 0.085622
+          },
+          "tracing": {
+            "rasterTaskCount": 158,
+            "rasterTaskCpuDurationMs": 224.14
+          }
+        },
+        "switching": {
+          "counters": {
+            "boundingClientRectReads": 0,
+            "overlayNameTextReads": 0,
+            "resizeObserverCreated": 0,
+            "overlaySlideMounts": 0,
+            "overlayNameTextMounts": 0
+          },
+          "performance": {
+            "LayoutCount": 9,
+            "LayoutDuration": 0.0007099999999999988,
+            "TaskDuration": 0.02302399999999999
+          },
+          "tracing": {
+            "rasterTaskCount": 318,
+            "rasterTaskCpuDurationMs": 339.359
+          }
+        }
+      },
+      {
+        "startup": {
+          "counters": {
+            "boundingClientRectReads": 72,
+            "overlayNameTextReads": 52,
+            "resizeObserverCreated": 20,
+            "overlaySlideMounts": 3,
+            "overlayNameTextMounts": 20
+          },
+          "performance": {
+            "LayoutCount": 40,
+            "LayoutDuration": 0.012982,
+            "TaskDuration": 0.0791
+          },
+          "tracing": {
+            "rasterTaskCount": 162,
+            "rasterTaskCpuDurationMs": 228.047
+          }
+        },
+        "switching": {
+          "counters": {
+            "boundingClientRectReads": 0,
+            "overlayNameTextReads": 0,
+            "resizeObserverCreated": 0,
+            "overlaySlideMounts": 0,
+            "overlayNameTextMounts": 0
+          },
+          "performance": {
+            "LayoutCount": 9,
+            "LayoutDuration": 0.0007530000000000002,
+            "TaskDuration": 0.022756
+          },
+          "tracing": {
+            "rasterTaskCount": 318,
+            "rasterTaskCpuDurationMs": 352.259
+          }
+        }
+      }
+    ],
+    "mean": {
+      "startup": {
+        "counters": {
+          "boundingClientRectReads": 72,
+          "overlayNameTextReads": 52,
+          "resizeObserverCreated": 20,
+          "overlaySlideMounts": 3,
+          "overlayNameTextMounts": 20
+        },
+        "performance": {
+          "LayoutCount": 39.333333333333336,
+          "LayoutDuration": 0.012571,
+          "TaskDuration": 0.08266166666666667
+        },
+        "tracing": {
+          "rasterTaskCount": 159.33333333333334,
+          "rasterTaskCpuDurationMs": 223.38633333333334
+        }
+      },
+      "switching": {
+        "counters": {
+          "boundingClientRectReads": 0,
+          "overlayNameTextReads": 0,
+          "resizeObserverCreated": 0,
+          "overlaySlideMounts": 0,
+          "overlayNameTextMounts": 0
+        },
+        "performance": {
+          "LayoutCount": 9,
+          "LayoutDuration": 0.000725333333333333,
+          "TaskDuration": 0.02274833333333333
+        },
+        "tracing": {
+          "rasterTaskCount": 318,
+          "rasterTaskCpuDurationMs": 349.202
+        }
+      }
+    }
+  },
+  "after-real": {
+    "schemaVersion": 1,
+    "profile": "real",
+    "conditions": {
+      "preview": "production Vite preview",
+      "harness": "1920x1080 iframe without Debug autoplay synchronization",
+      "viewport": {
+        "width": 1920,
+        "height": 1080,
+        "deviceScaleFactor": 1
+      },
+      "cacheDisabled": true,
+      "runCount": 3,
+      "slideSequence": [
+        0,
+        1,
+        2,
+        0
+      ],
+      "slideSequenceRepetitions": 3,
+      "animationControl": "prefers-reduced-motion: reduce",
+      "residualNoise": [
+        "Chromium process scheduling",
+        "JavaScript garbage collection",
+        "React and browser startup work outside OverlayName"
+      ],
+      "realProfileNamesRedacted": true
+    },
+    "runs": [
+      {
+        "startup": {
+          "counters": {
+            "boundingClientRectReads": 40,
+            "overlayNameTextReads": 20,
+            "resizeObserverCreated": 20,
+            "overlaySlideMounts": 3,
+            "overlayNameTextMounts": 20
+          },
+          "performance": {
+            "LayoutCount": 7,
+            "LayoutDuration": 0.010967,
+            "TaskDuration": 0.080507
+          },
+          "tracing": {
+            "rasterTaskCount": 157,
+            "rasterTaskCpuDurationMs": 226.749
+          }
+        },
+        "switching": {
+          "counters": {
+            "boundingClientRectReads": 0,
+            "overlayNameTextReads": 0,
+            "resizeObserverCreated": 0,
+            "overlaySlideMounts": 0,
+            "overlayNameTextMounts": 0
+          },
+          "performance": {
+            "LayoutCount": 9,
+            "LayoutDuration": 0.0007530000000000002,
+            "TaskDuration": 0.022084999999999994
+          },
+          "tracing": {
+            "rasterTaskCount": 318,
+            "rasterTaskCpuDurationMs": 346.781
+          }
+        }
+      },
+      {
+        "startup": {
+          "counters": {
+            "boundingClientRectReads": 40,
+            "overlayNameTextReads": 20,
+            "resizeObserverCreated": 20,
+            "overlaySlideMounts": 3,
+            "overlayNameTextMounts": 20
+          },
+          "performance": {
+            "LayoutCount": 8,
+            "LayoutDuration": 0.009163,
+            "TaskDuration": 0.078865
+          },
+          "tracing": {
+            "rasterTaskCount": 158,
+            "rasterTaskCpuDurationMs": 223.746
+          }
+        },
+        "switching": {
+          "counters": {
+            "boundingClientRectReads": 0,
+            "overlayNameTextReads": 0,
+            "resizeObserverCreated": 0,
+            "overlaySlideMounts": 0,
+            "overlayNameTextMounts": 0
+          },
+          "performance": {
+            "LayoutCount": 9,
+            "LayoutDuration": 0.0006860000000000008,
+            "TaskDuration": 0.021377000000000007
+          },
+          "tracing": {
+            "rasterTaskCount": 318,
+            "rasterTaskCpuDurationMs": 352.596
+          }
+        }
+      },
+      {
+        "startup": {
+          "counters": {
+            "boundingClientRectReads": 40,
+            "overlayNameTextReads": 20,
+            "resizeObserverCreated": 20,
+            "overlaySlideMounts": 3,
+            "overlayNameTextMounts": 20
+          },
+          "performance": {
+            "LayoutCount": 8,
+            "LayoutDuration": 0.00927,
+            "TaskDuration": 0.076977
+          },
+          "tracing": {
+            "rasterTaskCount": 158,
+            "rasterTaskCpuDurationMs": 225.358
+          }
+        },
+        "switching": {
+          "counters": {
+            "boundingClientRectReads": 0,
+            "overlayNameTextReads": 0,
+            "resizeObserverCreated": 0,
+            "overlaySlideMounts": 0,
+            "overlayNameTextMounts": 0
+          },
+          "performance": {
+            "LayoutCount": 9,
+            "LayoutDuration": 0.0007169999999999989,
+            "TaskDuration": 0.022971000000000005
+          },
+          "tracing": {
+            "rasterTaskCount": 318,
+            "rasterTaskCpuDurationMs": 348.585
+          }
+        }
+      }
+    ],
+    "mean": {
+      "startup": {
+        "counters": {
+          "boundingClientRectReads": 40,
+          "overlayNameTextReads": 20,
+          "resizeObserverCreated": 20,
+          "overlaySlideMounts": 3,
+          "overlayNameTextMounts": 20
+        },
+        "performance": {
+          "LayoutCount": 7.666666666666667,
+          "LayoutDuration": 0.0098,
+          "TaskDuration": 0.078783
+        },
+        "tracing": {
+          "rasterTaskCount": 157.66666666666666,
+          "rasterTaskCpuDurationMs": 225.28433333333336
+        }
+      },
+      "switching": {
+        "counters": {
+          "boundingClientRectReads": 0,
+          "overlayNameTextReads": 0,
+          "resizeObserverCreated": 0,
+          "overlaySlideMounts": 0,
+          "overlayNameTextMounts": 0
+        },
+        "performance": {
+          "LayoutCount": 9,
+          "LayoutDuration": 0.0007186666666666666,
+          "TaskDuration": 0.022144333333333335
+        },
+        "tracing": {
+          "rasterTaskCount": 318,
+          "rasterTaskCpuDurationMs": 349.3206666666667
+        }
+      }
+    }
+  }
+}
