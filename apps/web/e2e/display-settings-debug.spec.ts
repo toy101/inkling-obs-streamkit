@@ -11,6 +11,7 @@ const expectedSelection = {
   accentColor: "#8b5cf6",
   matchLabel: "",
   showPositions: true,
+  backgroundMode: "normal",
 };
 
 const overlayFrameSelector =
