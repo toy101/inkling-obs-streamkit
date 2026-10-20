@@ -40,10 +40,10 @@ test("Debugの背景だけを静止・再開し、APIとカルーセルの進行
   await page.goto("/?view=debug");
   const overlay = page.frameLocator('iframe[title="1920 × 1080 Overlay プレビュー"]');
   const background = overlay.locator(".overlay-background");
-  const mode = page.getByLabel("背景モード");
+  const mode = page.getByRole("button", { name: /^背景モード:/ });
   const active = overlay.locator(".overlay-slide.is-active");
   await expect(active.locator(".overlay-matchup")).toBeVisible();
-  await expect(mode).toHaveValue("normal");
+  await expect(mode).toHaveAttribute("aria-pressed", "false");
   const original = await backgroundStyles(background);
   expect(original.map((layer) => layer.animation)).toEqual(["overlay-vector-sweep", "overlay-vector-rings"]);
   const transform = original[0].transform;
@@ -51,7 +51,7 @@ test("Debugの背景だけを静止・再開し、APIとカルーセルの進行
 
   await page.clock.runFor(4_000);
   const requestCount = api.requests().length;
-  await mode.selectOption("lightweight");
+  await mode.click();
   await expect(background).toHaveAttribute("data-mode", "lightweight");
   const stationary = await backgroundStyles(background);
   expect(stationary.map((layer) => layer.animation)).toEqual(["none", "none"]);
@@ -60,7 +60,7 @@ test("Debugの背景だけを静止・再開し、APIとカルーセルの進行
   await page.clock.runFor(4_100);
   expect(await backgroundStyles(background)).toEqual(stationary);
   await expect(active.locator(".overlay-team-detail--left")).toBeVisible();
-  await mode.selectOption("normal");
+  await mode.click();
   await expect(background).toHaveAttribute("data-mode", "normal");
   const resumed = await backgroundStyles(background);
   expect(resumed.map((layer) => layer.animation)).toEqual(original.map((layer) => layer.animation));
@@ -72,7 +72,7 @@ test("Debugの背景だけを静止・再開し、APIとカルーセルの進行
 test("別ページのOverlayへ同期し、Dock・Overlay・Debugの再読込後も復元する", async ({ page }) => {
   await storeSelection(page);
   await page.goto("/?view=dock");
-  const mode = page.getByLabel("背景モード");
+  const mode = page.getByRole("button", { name: /^背景モード:/ });
   await expect(mode).toBeEnabled();
   const output = await page.context().newPage();
   const api = await installApiMock(output);
@@ -81,18 +81,18 @@ test("別ページのOverlayへ同期し、Dock・Overlay・Debugの再読込後
   await expect.poll(() => api.matchupRequests().length, { timeout: 30_000 }).toBe(1);
   await expect(output.locator(".overlay-carousel")).toBeVisible();
   const requestCount = api.requests().length;
-  await mode.selectOption("lightweight");
+  await mode.click();
   await expect(background).toHaveAttribute("data-mode", "lightweight");
   expect(api.requests()).toHaveLength(requestCount);
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("inkling:overlay-selection") ?? "null") as unknown)).toEqual({ ...selection, backgroundMode: "lightweight" });
   await page.reload();
   await expect(mode).toBeEnabled({ timeout: 30_000 });
-  await expect(mode).toHaveValue("lightweight");
+  await expect(mode).toHaveAttribute("aria-pressed", "true");
   await output.reload();
   await expect(background).toHaveAttribute("data-mode", "lightweight");
   await page.goto("/?view=debug");
   await expect(mode).toBeEnabled({ timeout: 30_000 });
-  await expect(mode).toHaveValue("lightweight");
+  await expect(mode).toHaveAttribute("aria-pressed", "true");
   await expect(page.frameLocator('iframe[title="1920 × 1080 Overlay プレビュー"]').locator(".overlay-background")).toHaveAttribute("data-mode", "lightweight");
   api.assertNoBrowserErrors();
   await output.close();
@@ -101,12 +101,12 @@ test("別ページのOverlayへ同期し、Dock・Overlay・Debugの再読込後
 test("未知の背景モードは通常へ戻し、対戦の再反映でも軽量設定を維持する", async ({ page }) => {
   await storeSelection(page, { backgroundMode: "invalid" });
   await page.goto("/?view=debug");
-  const mode = page.getByLabel("背景モード");
-  await expect(mode).toHaveValue("normal");
-  await mode.selectOption("lightweight");
+  const mode = page.getByRole("button", { name: /^背景モード:/ });
+  await expect(mode).toHaveAttribute("aria-pressed", "false");
+  await mode.click();
   await page.getByLabel("BRAVO", { exact: true }).selectOption("team-charlie-a");
   await page.getByRole("button", { name: "対戦を反映", exact: true }).click();
-  await expect(mode).toHaveValue("lightweight");
+  await expect(mode).toHaveAttribute("aria-pressed", "true");
   await expect(page.frameLocator('iframe[title="1920 × 1080 Overlay プレビュー"]').locator(".overlay-background")).toHaveAttribute("data-mode", "lightweight");
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("inkling:overlay-selection") ?? "null") as unknown)).toEqual({ ...selection, bravoTournamentTeamId: "team-charlie-a", backgroundMode: "lightweight" });
 });

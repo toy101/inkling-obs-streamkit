@@ -431,11 +431,16 @@ export function Dock() {
     });
   };
 
-  const handleBackgroundModeChange = (
-    backgroundMode: OverlaySelection["backgroundMode"],
-  ) => {
-    if (!submittedSelection) return;
-    commitSelection({ ...submittedSelection, backgroundMode });
+  const handleBackgroundModeToggle = () => {
+    if (!submittedSelection) {
+      return;
+    }
+
+    commitSelection({
+      ...submittedSelection,
+      backgroundMode:
+        submittedSelection.backgroundMode === "lightweight" ? "normal" : "lightweight",
+    });
   };
 
   const handlePositionToggle = () => {
@@ -454,6 +459,7 @@ export function Dock() {
   };
   const accentHue = getHueFromHex(accentColor);
   const showPositions = submittedSelection?.showPositions ?? true;
+  const isLightweightBackground = submittedSelection?.backgroundMode === "lightweight";
 
   return (
     <main className="dock" style={dockStyle}>
@@ -631,19 +637,15 @@ export function Dock() {
 
       <section className="dock-form" aria-labelledby="dock-position-heading">
         <h2 id="dock-position-heading">表示設定</h2>
-        <label>
-          背景モード
-          <select
-            value={submittedSelection?.backgroundMode ?? "normal"}
-            disabled={!submittedSelection}
-            onChange={(event) => handleBackgroundModeChange(
-              event.target.value === "lightweight" ? "lightweight" : "normal",
-            )}
-          >
-            <option value="normal">通常（アニメーション）</option>
-            <option value="lightweight">軽量（静止）</option>
-          </select>
-        </label>
+        <button
+          aria-pressed={isLightweightBackground}
+          className="dock-submit"
+          disabled={!submittedSelection}
+          onClick={handleBackgroundModeToggle}
+          type="button"
+        >
+          背景モード: {isLightweightBackground ? "軽量（静止）" : "通常（アニメーション）"}
+        </button>
         <button
           aria-pressed={showPositions}
           className="dock-submit"
