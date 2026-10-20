@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 
 import { OverlayName } from "./OverlayName";
@@ -179,13 +179,20 @@ function PlayerAvatar({ player }: PlayerAvatarProps) {
 
 type WeaponImageProps = {
   enabled: boolean;
+  retryVersion: number;
   weapon: OverlayWeapon;
 };
 
-function WeaponImage({ enabled, weapon }: WeaponImageProps) {
-  const [imageFailed, setImageFailed] = useState(false);
+function WeaponImage({ enabled, retryVersion, weapon }: WeaponImageProps) {
+  const [failedAttempt, setFailedAttempt] = useState<{
+    imageUrl: string;
+    retryVersion: number;
+  } | null>(null);
   const imageUrl = weapon.imageUrl;
-  const isUnavailable = imageUrl === null || imageFailed;
+  const isUnavailable = imageUrl === null || (
+    failedAttempt?.imageUrl === imageUrl &&
+    failedAttempt.retryVersion === retryVersion
+  );
 
   return (
     <li
@@ -206,7 +213,7 @@ function WeaponImage({ enabled, weapon }: WeaponImageProps) {
           alt=""
           decoding="async"
           loading="eager"
-          onError={() => setImageFailed(true)}
+          onError={() => setFailedAttempt({ imageUrl, retryVersion })}
         />
       ) : null}
     </li>
@@ -291,6 +298,7 @@ function MatchupSlide({ matchup, matchLabel }: MatchupCardSlideProps) {
 
 type TeamDetailSlideProps = {
   loadWeaponImages: boolean;
+  retryVersion: number;
   position: TeamPosition;
   showPositions: boolean;
   teamDesignation: TeamDesignation;
@@ -299,6 +307,7 @@ type TeamDetailSlideProps = {
 
 function TeamDetailSlide({
   loadWeaponImages,
+  retryVersion,
   position,
   showPositions,
   teamDesignation,
@@ -348,6 +357,7 @@ function TeamDetailSlide({
                   player.weapons.map((weapon) => (
                     <WeaponImage
                       enabled={loadWeaponImages}
+                      retryVersion={retryVersion}
                       weapon={weapon}
                       key={weapon.id}
                     />
@@ -392,6 +402,7 @@ function OverlayCarousel({
   showPositions,
   suspended,
 }: OverlayCarouselProps) {
+  const carouselRef = useRef<HTMLDivElement>(null);
   const [carouselState, setCarouselState] = useState<CarouselState>({
     animateActiveSlide: true,
     autoplay: true,
@@ -406,6 +417,17 @@ function OverlayCarousel({
     slideIndex,
     slideVersion,
   } = carouselState;
+
+  // Restart only the fade, keeping names, observers and successful images mounted.
+  useLayoutEffect(() => {
+    if (!autoplay || suspended || !animateActiveSlide) return;
+    const slide = carouselRef.current?.children.item(slideIndex);
+    for (const animation of slide?.getAnimations() ?? []) {
+      if (animation instanceof CSSAnimation && animation.animationName === "overlay-slide-fade") {
+        animation.currentTime = 0;
+      }
+    }
+  }, [animateActiveSlide, autoplay, slideIndex, slideVersion, suspended]);
 
   useEffect(() => {
     if (!suspended) {
@@ -493,6 +515,7 @@ function OverlayCarousel({
       content: (
         <TeamDetailSlide
           loadWeaponImages
+          retryVersion={slideIndex === 1 ? slideVersion : 0}
           position="left"
           showPositions={showPositions}
           teamDesignation="alpha"
@@ -505,6 +528,7 @@ function OverlayCarousel({
       content: (
         <TeamDetailSlide
           loadWeaponImages={loadBravoTeamImages}
+          retryVersion={slideIndex === 2 ? slideVersion : 0}
           position="right"
           showPositions={showPositions}
           teamDesignation="bravo"
@@ -516,6 +540,7 @@ function OverlayCarousel({
 
   return (
     <div
+      ref={carouselRef}
       className={`overlay-carousel${
         autoplay && !suspended && animateActiveSlide ? "" : " is-paused"
       }`}
@@ -525,7 +550,7 @@ function OverlayCarousel({
         <div
           className={`overlay-slide${index === slideIndex ? " is-active" : ""}`}
           aria-hidden={index !== slideIndex}
-          key={`${slide.id}-${index === slideIndex ? slideVersion : 0}`}
+          key={slide.id}
           style={{ animationDuration: `${SLIDE_DURATION_MS}ms` }}
         >
           {slide.content}
