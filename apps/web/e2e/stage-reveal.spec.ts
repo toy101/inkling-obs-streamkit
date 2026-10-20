@@ -1,6 +1,7 @@
 import type { Locator, Page } from "@playwright/test";
 
 import { fixtureData } from "./fixture-data";
+import { installMediaClock, updateMediaClock } from "./stage-media-clock";
 import { installStageVideoMock } from "./stage-video-mock";
 import type { StageVideoMockWindow } from "./stage-video-mock";
 import { expect, installApiMock, test as base } from "./test";
@@ -636,7 +637,7 @@ for (const {
       afterThreshold,
     );
     expect(afterState).toMatchObject({ paused: false, ended: false });
-    await page.clock.runFor(20);
+    await expect(reveal).toHaveClass(/is-exiting/);
     const exitStartState = await reveal.evaluate((element) => {
       const video = element.querySelector("video");
       if (!(video instanceof HTMLVideoElement)) {
@@ -666,6 +667,74 @@ for (const {
     await expect(submit).toBeDisabled();
     await waitForStageRevealIdle(page);
     await expect(submit).toBeEnabled();
+  });
+}
+
+for (const { label, suspend, resume, suspendEvent, resumeEvent } of [
+  { label: "一時停止", suspend: { paused: true }, resume: { paused: false }, suspendEvent: "pause", resumeEvent: "playing" },
+  { label: "バッファ待機", suspend: { waiting: true }, resume: { waiting: false }, suspendEvent: "waiting", resumeEvent: "playing" },
+  { label: "シーク", suspend: { seeking: true }, resume: { seeking: false }, suspendEvent: "seeking", resumeEvent: "seeked" },
+  { label: "速度0", suspend: { playbackRate: 0 }, resume: { playbackRate: 1 }, suspendEvent: "ratechange", resumeEvent: "ratechange" },
+] as const) {
+  test(`${label}中は退場予約を解除し、再開後の残り時間で予約する`, async ({ page, api }) => {
+    const root = await prepareDebug(page, api);
+    const submit = page.getByRole("button", { name: "確定・動画再生", exact: true });
+    await submit.click();
+    await expect.poll(() => readDownloads(root)).toHaveLength(1);
+    await completeDownload(page, root);
+    await assertPlaying(page, root);
+    const video = root.getByLabel("選択ステージ紹介動画");
+    const reveal = root.locator(".overlay-stage-reveal");
+    await installMediaClock(video);
+    await page.clock.fastForward(1_000);
+    await updateMediaClock(video, suspend, suspendEvent);
+    await page.clock.fastForward(20_000);
+    await expect(reveal).toHaveClass(/is-playing/);
+    await expect(submit).toBeDisabled();
+    await updateMediaClock(video, resume, resumeEvent);
+    await page.clock.fastForward(8_849);
+    await expect(reveal).toHaveClass(/is-playing/);
+    await page.clock.fastForward(2);
+    await expect(reveal).toHaveClass(/is-exiting/);
+    await page.clock.fastForward(150);
+    await assertNoReveal(root);
+    await waitForStageRevealIdle(page);
+    await expect(submit).toBeEnabled();
+    const urls = await root.evaluate(() => {
+      const mock = (window as StageVideoMockWindow).stageVideoMock;
+      return { created: mock.createdUrls, revoked: mock.revokedUrls };
+    });
+    expect(urls.revoked).toEqual(urls.created);
+  });
+}
+
+for (const { label, update, event, delay } of [
+  { label: "通常再生", update: {}, event: "playing", delay: 9_850 },
+  { label: "2倍速", update: { playbackRate: 2 }, event: "ratechange", delay: 4_850 },
+  { label: "0.5倍速", update: { playbackRate: 0.5 }, event: "ratechange", delay: 19_850 },
+  { label: "後方シーク", update: { currentTime: 2 }, event: "seeked", delay: 7_850 },
+  { label: "終了直前へのシーク", update: { currentTime: 9.9 }, event: "seeked", delay: 0 },
+  { label: "短い動画", update: { duration: 0.1 }, event: "durationchange", delay: 0 },
+  { label: "メタデータ更新", update: { duration: 5 }, event: "loadedmetadata", delay: 4_850 },
+  { label: "再生時間の補正", update: { currentTime: 3 }, event: "timeupdate", delay: 6_850 },
+] as const) {
+  test(`${label}の退場開始をメディア時間に合わせる`, async ({ page, api }) => {
+    const root = await prepareDebug(page, api);
+    await page.getByRole("button", { name: "確定・動画再生", exact: true }).click();
+    await expect.poll(() => readDownloads(root)).toHaveLength(1);
+    await completeDownload(page, root);
+    await assertPlaying(page, root);
+    const video = root.getByLabel("選択ステージ紹介動画");
+    const reveal = root.locator(".overlay-stage-reveal");
+    await installMediaClock(video);
+    if (label === "後方シーク") await page.clock.fastForward(3_000);
+    await updateMediaClock(video, update, event);
+    if (delay > 0) {
+      await page.clock.fastForward(delay - 1);
+      await expect(reveal).toHaveClass(/is-playing/);
+      await page.clock.fastForward(2);
+    }
+    await expect(reveal).toHaveClass(/is-exiting/);
   });
 }
 
@@ -1093,4 +1162,25 @@ test("別ページのDock要求もBroadcastChannelでOverlayへ届き、Blob動�
     overlayApi.assertNoBrowserErrors();
     await overlayPage.close();
   }
+});
+
+test("軽量背景でもステージ紹介を再生し、紹介中のモード変更を終了後に反映する", async ({ page, api }) => {
+  const root = await prepareDebug(page, api);
+  const mode = page.getByRole("button", { name: /^背景モード:/ });
+  const background = root.locator(".overlay-background");
+  await mode.click();
+  await expect(background).toHaveAttribute("data-mode", "lightweight");
+  const requestCount = api.requests().length;
+  await page.getByRole("button", { name: "確定・動画再生", exact: true }).click();
+  await expect.poll(() => readDownloads(root)).toHaveLength(1);
+  await completeDownload(page, root);
+  await assertPlaying(page, root);
+  await assertRevealSelection(root);
+  await mode.click();
+  await expect(background).toHaveAttribute("data-mode", "lightweight");
+  await root.getByLabel("選択ステージ紹介動画").dispatchEvent("ended", { bubbles: false });
+  await page.clock.runFor(150);
+  await assertNoReveal(root);
+  await expect(background).toHaveAttribute("data-mode", "normal");
+  expect(api.requests()).toHaveLength(requestCount);
 });

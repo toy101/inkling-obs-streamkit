@@ -914,14 +914,26 @@ export function Overlay() {
       const video = stageRevealVideoRef.current;
       if (!video) return;
 
-      let frameId = 0;
-      const checkRemainingTime = () => {
+      let timeoutId: number | null = null;
+      let waiting = video.readyState < HTMLMediaElement.HAVE_FUTURE_DATA;
+      const cancelExit = () => {
+        if (timeoutId !== null) {
+          window.clearTimeout(timeoutId);
+          timeoutId = null;
+        }
+      };
+      const scheduleExit = () => {
+        cancelExit();
         if (
-          !video.paused && !video.ended && !video.seeking &&
-          Number.isFinite(video.duration) && video.duration > 0 &&
-          video.playbackRate > 0 &&
-          (video.duration - video.currentTime) / video.playbackRate <= exitDuration / 1_000
-        ) {
+          waiting || video.paused || video.ended || video.seeking ||
+          video.readyState < HTMLMediaElement.HAVE_FUTURE_DATA ||
+          !Number.isFinite(video.duration) || video.duration <= 0 ||
+          !Number.isFinite(video.currentTime) || video.playbackRate <= 0
+        ) return;
+
+        const delay = (video.duration - video.currentTime) /
+          video.playbackRate * 1_000 - exitDuration;
+        if (delay <= 0) {
           setStageRevealPlayback((current) =>
             current?.requestId === requestId && current.phase === "playing"
               ? { ...current, phase: "exiting" }
@@ -929,10 +941,44 @@ export function Overlay() {
           );
           return;
         }
-        frameId = window.requestAnimationFrame(checkRemainingTime);
+        // Recheck the media clock on expiry: buffering can delay media events.
+        timeoutId = window.setTimeout(scheduleExit, Math.min(delay, 2_147_483_647));
       };
-      frameId = window.requestAnimationFrame(checkRemainingTime);
-      return () => window.cancelAnimationFrame(frameId);
+      const onWaiting = () => {
+        waiting = true;
+        cancelExit();
+      };
+      const onPlaying = () => {
+        waiting = false;
+        scheduleExit();
+      };
+      const onSeeked = () => {
+        waiting = video.readyState < HTMLMediaElement.HAVE_FUTURE_DATA;
+        scheduleExit();
+      };
+      const rescheduleEvents = [
+        "durationchange", "loadedmetadata", "ratechange", "timeupdate",
+      ] as const;
+      for (const event of rescheduleEvents) {
+        video.addEventListener(event, scheduleExit);
+      }
+      video.addEventListener("playing", onPlaying);
+      video.addEventListener("pause", cancelExit);
+      video.addEventListener("waiting", onWaiting);
+      video.addEventListener("seeking", cancelExit);
+      video.addEventListener("seeked", onSeeked);
+      scheduleExit();
+      return () => {
+        cancelExit();
+        for (const event of rescheduleEvents) {
+          video.removeEventListener(event, scheduleExit);
+        }
+        video.removeEventListener("playing", onPlaying);
+        video.removeEventListener("pause", cancelExit);
+        video.removeEventListener("waiting", onWaiting);
+        video.removeEventListener("seeking", cancelExit);
+        video.removeEventListener("seeked", onSeeked);
+      };
     }
 
     if (stageRevealPlayback.phase === "exiting") {
@@ -1013,7 +1059,11 @@ export function Overlay() {
 
   return (
     <main className="overlay" style={overlayStyle}>
-      <div className="overlay-background" aria-hidden="true">
+      <div
+        className="overlay-background"
+        data-mode={selection?.backgroundMode ?? "normal"}
+        aria-hidden="true"
+      >
         <div className="overlay-background-sweep" />
         <div className="overlay-background-rings" />
       </div>

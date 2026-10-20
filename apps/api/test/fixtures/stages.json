@@ -1,5 +1,10 @@
 [
   {
+    "id": "stage-2",
+    "name": "Stage Two",
+    "en": "Stage Two"
+  },
+  {
     "id": "stage-1",
     "name": "Stage One",
     "en": "Stage One"

@@ -1,0 +1,191 @@
+{
+  "browser": "153.0.8010.12",
+  "platform": "linux",
+  "arch": "arm64",
+  "viewport": "1920x1080",
+  "gpu": {
+    "devices": [
+      {
+        "vendorId": 65535,
+        "deviceId": 65535,
+        "vendorString": "Google Inc. (Google)",
+        "deviceString": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (LLVM 10.0.0) (0x0000C0DE)), SwiftShader driver-5.0.0)",
+        "driverVendor": "SwANGLE",
+        "driverVersion": "5.0.0"
+      }
+    ],
+    "featureStatus": {
+      "gpu_compositing": "disabled_software"
+    }
+  },
+  "results": [
+    {
+      "run": 1,
+      "mode": "normal",
+      "seconds": 32.00281438500001,
+      "rendererCpuSeconds": 2.21,
+      "gpuProcessCpuSeconds": 12,
+      "processTypes": [
+        "browser",
+        "renderer",
+        "renderer",
+        "renderer",
+        "GPU",
+        "network.mojom.NetworkService",
+        "storage.mojom.StorageService",
+        "tracing.mojom.TracingService"
+      ],
+      "taskMs": 14289.868999999999,
+      "recalcCount": 27,
+      "recalcMs": 35.479,
+      "layoutCount": 3,
+      "layoutMs": 48.157,
+      "paintMs": 25.26,
+      "prePaintMs": 23.947,
+      "activeSlideInsertions": "3",
+      "carouselTimerFires": 4,
+      "networkRequests": 0,
+      "apiRequests": 0
+    },
+    {
+      "run": 2,
+      "mode": "lightweight",
+      "seconds": 32.00919667500001,
+      "rendererCpuSeconds": 1.6699999999999997,
+      "gpuProcessCpuSeconds": 2.91,
+      "processTypes": [
+        "browser",
+        "renderer",
+        "renderer",
+        "renderer",
+        "GPU",
+        "network.mojom.NetworkService",
+        "storage.mojom.StorageService",
+        "tracing.mojom.TracingService"
+      ],
+      "taskMs": 21266.105,
+      "recalcCount": 7,
+      "recalcMs": 17.993,
+      "layoutCount": 2,
+      "layoutMs": 31.744,
+      "paintMs": 24.967,
+      "prePaintMs": 5.133,
+      "activeSlideInsertions": "3",
+      "carouselTimerFires": 3,
+      "networkRequests": 0,
+      "apiRequests": 0
+    },
+    {
+      "run": 3,
+      "mode": "lightweight",
+      "seconds": 32.002751812,
+      "rendererCpuSeconds": 2.2100000000000013,
+      "gpuProcessCpuSeconds": 3.6400000000000006,
+      "processTypes": [
+        "browser",
+        "renderer",
+        "renderer",
+        "renderer",
+        "GPU",
+        "network.mojom.NetworkService",
+        "storage.mojom.StorageService",
+        "tracing.mojom.TracingService"
+      ],
+      "taskMs": 6069.459,
+      "recalcCount": 11,
+      "recalcMs": 13.039,
+      "layoutCount": 3,
+      "layoutMs": 36.811,
+      "paintMs": 14.77,
+      "prePaintMs": 8.283,
+      "activeSlideInsertions": "4",
+      "carouselTimerFires": 4,
+      "networkRequests": 0,
+      "apiRequests": 0
+    },
+    {
+      "run": 4,
+      "mode": "normal",
+      "seconds": 32.004301852000005,
+      "rendererCpuSeconds": 1.970000000000001,
+      "gpuProcessCpuSeconds": 14.329999999999998,
+      "processTypes": [
+        "browser",
+        "renderer",
+        "renderer",
+        "renderer",
+        "GPU",
+        "network.mojom.NetworkService",
+        "storage.mojom.StorageService",
+        "tracing.mojom.TracingService"
+      ],
+      "taskMs": 9753.992,
+      "recalcCount": 25,
+      "recalcMs": 55.403,
+      "layoutCount": 3,
+      "layoutMs": 33.298,
+      "paintMs": 16.327,
+      "prePaintMs": 20.33,
+      "activeSlideInsertions": "3",
+      "carouselTimerFires": 3,
+      "networkRequests": 0,
+      "apiRequests": 0
+    },
+    {
+      "run": 5,
+      "mode": "normal",
+      "seconds": 32.003462138,
+      "rendererCpuSeconds": 0.6799999999999997,
+      "gpuProcessCpuSeconds": 5.660000000000011,
+      "processTypes": [
+        "browser",
+        "renderer",
+        "renderer",
+        "renderer",
+        "GPU",
+        "network.mojom.NetworkService",
+        "storage.mojom.StorageService",
+        "tracing.mojom.TracingService"
+      ],
+      "taskMs": 19708.686999999998,
+      "recalcCount": 8,
+      "recalcMs": 11.096,
+      "layoutCount": 1,
+      "layoutMs": 14.234,
+      "paintMs": 5.651,
+      "prePaintMs": 3.693,
+      "activeSlideInsertions": "2",
+      "carouselTimerFires": 2,
+      "networkRequests": 0,
+      "apiRequests": 0
+    },
+    {
+      "run": 6,
+      "mode": "lightweight",
+      "seconds": 32.002134448,
+      "rendererCpuSeconds": 2.9099999999999966,
+      "gpuProcessCpuSeconds": 1.9299999999999926,
+      "processTypes": [
+        "browser",
+        "renderer",
+        "renderer",
+        "renderer",
+        "GPU",
+        "network.mojom.NetworkService",
+        "storage.mojom.StorageService",
+        "tracing.mojom.TracingService"
+      ],
+      "taskMs": 17083.764,
+      "recalcCount": 6,
+      "recalcMs": 13.421000000000001,
+      "layoutCount": 2,
+      "layoutMs": 43.424,
+      "paintMs": 11.057,
+      "prePaintMs": 6.604,
+      "activeSlideInsertions": "2",
+      "carouselTimerFires": 2,
+      "networkRequests": 0,
+      "apiRequests": 0
+    }
+  ]
+}

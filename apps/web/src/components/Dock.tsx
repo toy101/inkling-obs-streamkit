@@ -369,6 +369,7 @@ export function Dock() {
       accentColor: submittedSelection?.accentColor ?? restoredSelection.current?.accentColor ?? DEFAULT_ACCENT_COLOR,
       matchLabel: submittedSelection?.matchLabel ?? restoredSelection.current?.matchLabel ?? "",
       showPositions: submittedSelection?.showPositions ?? restoredSelection.current?.showPositions ?? true,
+      backgroundMode: submittedSelection?.backgroundMode ?? restoredSelection.current?.backgroundMode ?? "normal",
     };
 
     commitSelection(nextSelection);
@@ -430,6 +431,18 @@ export function Dock() {
     });
   };
 
+  const handleBackgroundModeToggle = () => {
+    if (!submittedSelection) {
+      return;
+    }
+
+    commitSelection({
+      ...submittedSelection,
+      backgroundMode:
+        submittedSelection.backgroundMode === "lightweight" ? "normal" : "lightweight",
+    });
+  };
+
   const handlePositionToggle = () => {
     if (!submittedSelection) {
       return;
@@ -446,6 +459,7 @@ export function Dock() {
   };
   const accentHue = getHueFromHex(accentColor);
   const showPositions = submittedSelection?.showPositions ?? true;
+  const isLightweightBackground = submittedSelection?.backgroundMode === "lightweight";
 
   return (
     <main className="dock" style={dockStyle}>
@@ -623,6 +637,15 @@ export function Dock() {
 
       <section className="dock-form" aria-labelledby="dock-position-heading">
         <h2 id="dock-position-heading">表示設定</h2>
+        <button
+          aria-pressed={isLightweightBackground}
+          className="dock-submit"
+          disabled={!submittedSelection}
+          onClick={handleBackgroundModeToggle}
+          type="button"
+        >
+          背景モード: {isLightweightBackground ? "軽量（静止）" : "通常（アニメーション）"}
+        </button>
         <button
           aria-pressed={showPositions}
           className="dock-submit"

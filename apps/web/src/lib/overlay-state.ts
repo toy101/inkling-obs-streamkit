@@ -19,6 +19,7 @@ export type OverlaySelection = {
   accentColor: string;
   matchLabel: string;
   showPositions: boolean;
+  backgroundMode: "normal" | "lightweight";
 };
 
 export type StageRevealRequest = {
@@ -94,6 +95,8 @@ function parseOverlaySelection(value: unknown): OverlaySelection | null {
     stageId: getString(value, "stageId") ?? "",
     accentColor: normalizeAccentColor(value["accentColor"]),
     matchLabel: normalizeMatchLabel(value["matchLabel"]),
+    backgroundMode:
+      value["backgroundMode"] === "lightweight" ? "lightweight" : "normal",
     showPositions:
       typeof value["showPositions"] === "boolean"
         ? value["showPositions"]
