@@ -1,5 +1,9 @@
 [
   {
+    "id": "2",
+    "name": "Weapon Two"
+  },
+  {
     "id": "1",
     "name": "Weapon One"
   }
