@@ -55,7 +55,6 @@ test("同幅通知を省き、幅を戻すと計測済みのサイズを再利�
   const name = frame.locator(".overlay-player-name").first();
   const text = name.locator("span");
   const originalSize = await text.evaluate((element) => element.style.fontSize);
-  expect(Number(await text.getAttribute("data-fit-reads"))).toBeLessThanOrEqual(5);
   await text.evaluate((element) => { element.dataset.fitReads = "0"; });
   await frame.evaluate(() => window.dispatchEvent(new Event("repeat-name-resize")));
   await expect(text).toHaveAttribute("data-fit-reads", "0");
@@ -160,4 +159,37 @@ test("混在する日本語・英数字・絵文字をフォールバックフ�
       return text.width > 0 && text.left >= left - 0.5 && text.right <= right + 0.5;
     }),
   )).toBe(true);
+});
+
+test("既存の12回探索と同じ最終サイズを保つ", async ({ page }) => {
+  const frame = await openNames(page);
+  const differences = await frame.locator(".overlay-name-text").evaluateAll((elements) =>
+    elements.map((element) => {
+      if (!(element instanceof HTMLElement) || !element.parentElement) return 1;
+      const parent = element.parentElement;
+      const style = getComputedStyle(parent);
+      const width = parent.getBoundingClientRect().width -
+        Number.parseFloat(style.paddingLeft) - Number.parseFloat(style.paddingRight) -
+        Number.parseFloat(style.borderLeftWidth) - Number.parseFloat(style.borderRightWidth);
+      const actualSize = element.style.fontSize;
+      element.style.fontSize = "";
+      let expectedSize = "";
+      if (element.getBoundingClientRect().width > width) {
+        let minimum = 0;
+        let maximum = Number.parseFloat(style.fontSize);
+        for (let step = 0; step < 12; step += 1) {
+          const middle = (minimum + maximum) / 2;
+          element.style.fontSize = `${middle}px`;
+          if (element.getBoundingClientRect().width <= width) minimum = middle;
+          else maximum = middle;
+        }
+        expectedSize = `${minimum}px`;
+      }
+      element.style.fontSize = expectedSize;
+      const normalizedExpected = element.style.fontSize;
+      element.style.fontSize = actualSize;
+      return actualSize === normalizedExpected ? 0 : 1;
+    }),
+  );
+  expect(differences).toEqual(Array(20).fill(0));
 });

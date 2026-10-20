@@ -57,40 +57,39 @@ export function OverlayName({ name, className, as: Tag = "strong" }: OverlayName
         return;
       }
 
-      // Inherited letter spacing and fallback glyphs can make scaling non-linear.
-      let fontSize = Number.parseFloat(style.fontSize);
-      const targetWidth = Math.max(0, availableWidth - 0.5);
-      let previousSize = fontSize;
+      // Keep the same size grid as the original 12-step search, including rounding.
+      const baseSize = Number.parseFloat(style.fontSize);
+      const divisions = 4096;
+      let minimum = 0;
+      let maximum = divisions;
+      let previousStep = divisions;
       let previousWidth = measuredWidth;
-      for (let step = 0; step < 3; step += 1) {
-        const slope = (previousWidth - measuredWidth) / (previousSize - fontSize);
-        const nextSize = Number.isFinite(slope) && slope > 0
-          ? fontSize - (measuredWidth - targetWidth) / slope
-          : fontSize * targetWidth / measuredWidth;
-        previousSize = fontSize;
-        previousWidth = measuredWidth;
-        fontSize = Math.max(0, Math.min(fontSize, nextSize));
-        text.style.fontSize = `${fontSize}px`;
+      let step = Math.max(1, Math.min(divisions - 1,
+        Math.floor(divisions * availableWidth / measuredWidth)));
+
+      // Correct the estimate, check nearby rounded sizes, then bisect if necessary.
+      for (let attempt = 0; attempt < 18; attempt += 1) {
+        text.style.fontSize = `${baseSize * step / divisions}px`;
         measuredWidth = text.getBoundingClientRect().width;
         if (measuredWidth <= availableWidth) {
-          remember();
-          return;
-        }
-      }
-
-      // Retain a bounded fallback for font metrics that resist proportional fitting.
-      let minimum = 0;
-      let maximum = fontSize;
-      for (let step = 0; step < 12; step += 1) {
-        const fontSize = (minimum + maximum) / 2;
-        text.style.fontSize = `${fontSize}px`;
-        if (text.getBoundingClientRect().width <= availableWidth) {
-          minimum = fontSize;
+          minimum = step;
         } else {
-          maximum = fontSize;
+          maximum = step;
         }
+        if (maximum - minimum <= 1) break;
+
+        const slope = (measuredWidth - previousWidth) / (step - previousStep);
+        let estimate = Math.floor((minimum + maximum) / 2);
+        if (attempt < 2 && Number.isFinite(slope) && slope > 0) {
+          estimate = Math.floor(step + (availableWidth - measuredWidth) / slope);
+        } else if (attempt < 5) {
+          estimate = step + (measuredWidth <= availableWidth ? 1 : -1);
+        }
+        previousStep = step;
+        previousWidth = measuredWidth;
+        step = Math.max(minimum + 1, Math.min(maximum - 1, estimate));
       }
-      text.style.fontSize = `${minimum}px`;
+      text.style.fontSize = `${baseSize * minimum / divisions}px`;
       remember();
     };
 
