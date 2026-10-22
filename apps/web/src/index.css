@@ -788,44 +788,45 @@ html[data-view="overlay"] body {
 .overlay-stage-reveal-rule {
   position: absolute;
   top: 12px;
-  left: 12px;
+  left: 24px;
   width: 1220px;
 }
 
 .overlay-stage-reveal-rule strong {
   display: block;
   color: rgb(var(--overlay-accent-rgb) / 8%);
-  font-size: 158px;
+  font-size: 164px;
   font-weight: 900;
   line-height: 1;
-  letter-spacing: -0.055em;
+  letter-spacing: -0.02em;
   text-shadow: none;
   white-space: nowrap;
-  -webkit-text-stroke: 4px var(--overlay-accent-color);
+  -webkit-text-stroke: 6px var(--overlay-accent-color);
 }
 
 .overlay-stage-reveal-rule p {
   max-width: 1180px;
-  margin: 26px 0 0;
-  font-size: 30px;
+  margin: 8px 0 0;
+  font-size: 28px;
   font-weight: 800;
-  line-height: 1.16;
-  letter-spacing: -0.025em;
+  line-height: 1.24;
+  letter-spacing: -0.005em;
+  white-space: pre-line;
 }
 
 .overlay-stage-reveal-rule span {
   display: block;
   margin-top: 14px;
-  font-size: 66px;
+  font-size: 88px;
   font-weight: 900;
   line-height: 1;
-  letter-spacing: 0.015em;
+  letter-spacing: 0.05em;
 }
 
 .overlay-stage-reveal-stage {
   position: absolute;
   right: 24px;
-  bottom: 24px;
+  bottom: 32px;
   display: grid;
   justify-items: end;
   width: 1320px;
@@ -845,8 +846,8 @@ html[data-view="overlay"] body {
   color: var(--overlay-accent-color);
   font-size: 162px;
   font-weight: 900;
-  line-height: 0.83;
-  letter-spacing: -0.065em;
+  line-height: 1.08;
+  letter-spacing: -0.024em;
   overflow-wrap: normal;
   text-wrap: balance;
 }
