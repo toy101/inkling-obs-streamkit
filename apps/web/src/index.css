@@ -790,12 +790,6 @@ html[data-view="overlay"] body {
   top: 12px;
   left: 12px;
   width: 1220px;
-  will-change: transform;
-}
-
-.overlay-stage-reveal.is-entering .overlay-stage-reveal-rule {
-  animation: stage-reveal-rule-enter var(--stage-reveal-enter-duration)
-    var(--stage-reveal-easing) both;
 }
 
 .overlay-stage-reveal-rule strong {
@@ -836,12 +830,6 @@ html[data-view="overlay"] body {
   justify-items: end;
   width: 1320px;
   text-align: right;
-  will-change: transform;
-}
-
-.overlay-stage-reveal.is-entering .overlay-stage-reveal-stage {
-  animation: stage-reveal-stage-enter var(--stage-reveal-enter-duration)
-    var(--stage-reveal-easing) both;
 }
 
 .overlay-stage-reveal-stage span {
@@ -1384,30 +1372,6 @@ html[data-view="overlay"] body {
   }
 }
 
-@keyframes stage-reveal-rule-enter {
-  0%,
-  60% {
-    transform: translate3d(-40px, 0, 0);
-  }
-
-  82%,
-  100% {
-    transform: translate3d(0, 0, 0);
-  }
-}
-
-@keyframes stage-reveal-stage-enter {
-  0%,
-  64% {
-    transform: translate3d(0, 42px, 0);
-  }
-
-  84%,
-  100% {
-    transform: translate3d(0, 0, 0);
-  }
-}
-
 @keyframes stage-transition-enter {
   0%,
   78% {
@@ -1603,12 +1567,6 @@ html[data-view="overlay"] body {
   .overlay-stage-reveal-vignette,
   .overlay-stage-reveal-content {
     opacity: 1;
-    animation: none;
-  }
-
-  .overlay-stage-reveal-rule,
-  .overlay-stage-reveal-stage {
-    transform: none;
     animation: none;
   }
 
