@@ -16,6 +16,7 @@ import type {
   DebugStageRevealSelection,
 } from "../lib/debug-overlay-preview";
 import { useMatchupCatalogs } from "../lib/use-matchup-catalogs";
+import { preloadPlayerIcons } from "../lib/preload-player-icons";
 
 import { api } from "../lib/api";
 import type { OverlayMatchup } from "../lib/api";
@@ -570,6 +571,7 @@ type LoadedMatchup = {
   carouselSelectionKey: string;
   dataSelectionKey: string;
   matchup: OverlayMatchup | null;
+  icons: HTMLImageElement[];
 };
 
 type StageRevealPhase = "ready" | "entering" | "playing" | "exiting";
@@ -1031,7 +1033,7 @@ export function Overlay() {
       return;
     }
 
-    let cancelled = false;
+    const controller = new AbortController();
 
     const loadMatchup = async () => {
       const data = await requestMatchup(dataSelectionKey, {
@@ -1042,15 +1044,20 @@ export function Overlay() {
         stageId,
       });
 
-      if (!cancelled) {
-        setLoaded({ carouselSelectionKey, dataSelectionKey, matchup: data });
+      if (controller.signal.aborted) return;
+      const prepared = data
+        ? await preloadPlayerIcons(data, controller.signal)
+        : { matchup: null, icons: [] };
+
+      if (!controller.signal.aborted) {
+        setLoaded({ carouselSelectionKey, dataSelectionKey, ...prepared });
       }
     };
 
     void loadMatchup();
 
     return () => {
-      cancelled = true;
+      controller.abort();
     };
   }, [
     alphaTournamentTeamId,
@@ -1063,8 +1070,7 @@ export function Overlay() {
     tournamentId,
   ]);
 
-  const matchup =
-    loaded?.carouselSelectionKey === carouselSelectionKey ? loaded.matchup : null;
+  const matchup = selection ? loaded?.matchup : null;
   const previewRule = stageRevealPlayback?.loop
     ? rules.find((rule) => rule.id === debugStageRevealSelection.ruleId)
     : null;
@@ -1095,7 +1101,7 @@ export function Overlay() {
 
       {matchup && (
         <OverlayCarousel
-          key={carouselSelectionKey}
+          key={loaded?.carouselSelectionKey}
           matchup={matchup}
           matchLabel={matchLabel}
           showPositions={showPositions}
